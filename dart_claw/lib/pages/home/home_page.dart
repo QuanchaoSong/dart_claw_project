@@ -1,5 +1,5 @@
-import 'package:darted_claw/pages/home/home_logic.dart';
-import 'package:darted_claw/pages/settings/settings_page.dart';
+import 'package:dart_claw/pages/home/home_logic.dart';
+import 'package:dart_claw/pages/settings/settings_page.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -12,7 +12,7 @@ class HomePage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: BoxDecoration(
+        decoration: BoxDecoration(          
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -62,7 +62,7 @@ class HomePage extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '🦞 Darted Claw',
+                      '🦞 dart Claw',
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,

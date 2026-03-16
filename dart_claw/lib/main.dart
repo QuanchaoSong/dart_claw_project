@@ -1,11 +1,11 @@
-import 'package:darted_claw/pages/home/home_page.dart';
-import 'package:darted_claw/others/services/app_config_service.dart';
+import 'package:dart_claw/others/services/app_config_service.dart';
+import 'package:dart_claw/pages/home/home_page.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // 初始化配置服务（读取 ~/.darted_claw/config.json）
+  // 初始化配置服务（读取 ~/.dart_claw/config.json）
   await Get.putAsync(() => AppConfigService().init());
   runApp(const MyApp());
 }
@@ -16,7 +16,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GetMaterialApp(
-      title: 'Darted Claw',
+      title: 'dart Claw',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,

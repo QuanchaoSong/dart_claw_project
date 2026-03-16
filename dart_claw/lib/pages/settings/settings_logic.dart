@@ -1,6 +1,6 @@
-import 'package:darted_claw/others/model/ai_model_settings_info.dart';
-import 'package:darted_claw/others/model/session_settings_info.dart';
-import 'package:darted_claw/others/services/app_config_service.dart';
+import 'package:dart_claw/others/model/ai_model_settings_info.dart';
+import 'package:dart_claw/others/model/session_settings_info.dart';
+import 'package:dart_claw/others/services/app_config_service.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 

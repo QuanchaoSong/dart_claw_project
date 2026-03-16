@@ -1,5 +1,5 @@
-import 'package:darted_claw/others/model/ai_model_settings_info.dart';
-import 'package:darted_claw/others/model/session_settings_info.dart';
+import 'package:dart_claw/others/model/ai_model_settings_info.dart';
+import 'package:dart_claw/others/model/session_settings_info.dart';
 
 /// 顶层 App 配置（聚合所有 settings）
 class AppConfigInfo {

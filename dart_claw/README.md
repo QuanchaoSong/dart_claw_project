@@ -1,4 +1,4 @@
-# darted_claw
+# dart_claw
 
 A new Flutter project.
 

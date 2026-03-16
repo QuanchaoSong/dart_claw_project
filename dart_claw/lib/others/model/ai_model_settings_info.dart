@@ -1,4 +1,4 @@
-import 'package:darted_claw/others/model/session_settings_info.dart';
+import 'package:dart_claw/others/model/session_settings_info.dart';
 
 /// 支持的 AI 服务提供商
 enum AIProvider {

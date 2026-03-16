@@ -1,16 +1,16 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:darted_claw/others/model/ai_model_settings_info.dart';
-import 'package:darted_claw/others/model/app_config_info.dart';
-import 'package:darted_claw/others/model/session_settings_info.dart';
+import 'package:dart_claw/others/model/ai_model_settings_info.dart';
+import 'package:dart_claw/others/model/app_config_info.dart';
+import 'package:dart_claw/others/model/session_settings_info.dart';
 import 'package:get/get.dart';
 import 'package:path/path.dart' as p;
 
 // sk-b5e19747344f4ab1a66c08b655c948ca
 
 /// 全局配置服务（GetxService 单例）
-/// 负责读写 ~/.darted_claw/config.json
+/// 负责读写 ~/.dart_claw/config.json
 ///
 /// 使用方式：
 ///   await Get.putAsync(() => AppConfigService().init());
@@ -21,9 +21,9 @@ import 'package:path/path.dart' as p;
 class AppConfigService extends GetxService {
   static AppConfigService get shared => Get.find<AppConfigService>();
 
-  // 配置目录：~/.darted_claw/
+  // 配置目录：~/.dart_claw/
   static String get configDir =>
-      p.join(Platform.environment['HOME'] ?? '', '.darted_claw');
+      p.join(Platform.environment['HOME'] ?? '', '.dart_claw');
 
   static String get configFilePath => p.join(configDir, 'config.json');
 
