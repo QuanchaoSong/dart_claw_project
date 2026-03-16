@@ -1,43 +1,57 @@
+import 'package:flutter/foundation.dart';
+
 import '../llm/claw_llm_client.dart';
 import '../llm/claw_llm_delta.dart';
 import '../model/agent_event.dart';
 import '../model/chat_message.dart';
 import '../model/tool_call_record.dart';
+import '../tools/builtin_tools.dart';
+import '../tools/claw_tool.dart';
 
-/// Agent loop 核心：组装 prompt → 调用 LLM → 解析 tool_call → 发出事件流
+/// Agent loop 核心：组装 prompt → 调用 LLM → 执行工具 → 循环，直到无工具调用
 ///
-/// 当前阶段（二）：只处理纯文本对话，tool_call 解析完成但执行留待阶段三。
+/// 阶段三：完整工具执行 loop，支持多轮 LLM ↔ 工具调用。
 class ClawAgentRunner {
   final ClawLlmClient client;
 
-  /// 编码助手系统 prompt
+  /// 已注册的工具列表（可在外部扩展）
+  final List<ClawTool> tools;
+
   static const _systemPrompt = '''
-Your name is Dart Claw, an expert AI coding assistant running on the user's local machine.
-You help users with programming tasks: reading and writing files, executing shell commands, navigating codebases, debugging, and explaining concepts.
+You are dart Claw, an expert AI coding assistant running on the user's local machine.
+You help users with programming tasks.
 
-Guidelines:
-- Be concise and practical.
-- Before editing a file, read it first to understand the context.
-- For dangerous operations (deleting files, running scripts), explain what you are about to do before proceeding.
-- When a task is complete, provide a brief summary of what was done.''';
+IMPORTANT RULES:
+- When asked about system info, file contents, or anything that requires inspecting the machine, you MUST call the appropriate tool instead of guessing or describing.
+- When asked to modify files, always read them first with read_file, then write with write_file.
+- For dangerous operations (run_command, write_file), briefly state what you are about to do before calling the tool.
+- When all tasks are done, provide a concise summary.
+- Be direct and practical. Avoid unnecessary explanations.''';
 
-  ClawAgentRunner({required this.client});
+  ClawAgentRunner({
+    required this.client,
+    List<ClawTool>? tools,
+  }) : tools = tools ??
+            [
+              RunCommandTool(),
+              ReadFileTool(),
+              WriteFileTool(),
+              ListDirTool(),
+              SearchInFileTool(),
+            ];
 
-  /// 运行一轮 Agent 对话，返回 [ClawAgentEvent] 事件流
-  ///
-  /// [userMessage]         本轮用户消息内容
-  /// [history]             历史消息列表（不含本轮用户消息）
-  /// [assistantMessageId]  调用方预先创建的 assistant 占位消息 id（用于流式显示）
-  /// [tools]               传给 LLM 的工具定义列表（阶段三填入）
+  /// 运行 Agent 对话：LLM → 工具执行 → 再次 LLM → 循环，最多 [maxRounds] 轮
   Stream<ClawAgentEvent> run({
     required String userMessage,
     List<ClawChatMessage> history = const [],
     String? assistantMessageId,
-    List<Map<String, dynamic>> tools = const [],
+    int maxRounds = 10,
   }) async* {
     final assistantId = assistantMessageId ?? _genId();
 
-    // ── 构建 messages 列表 ────────────────────────────────────────────────
+    final toolDefs = tools.map((t) => t.definition).toList();
+    final toolMap = {for (final t in tools) t.name: t};
+
     final apiMessages = <Map<String, dynamic>>[
       {'role': 'system', 'content': _systemPrompt},
       for (final msg in history)
@@ -48,40 +62,109 @@ Guidelines:
     yield ClawAgentLogEvent('调用 ${client.modelId}…');
 
     try {
-      String fullContent = '';
-      List<ClawToolCallRecord> pendingToolCalls = [];
+      bool isFirstAssistantMsg = true;
 
-      // ── 流式调用 LLM ──────────────────────────────────────────────────
-      await for (final delta in client.streamChat(
-        messages: apiMessages,
-        tools: tools.isEmpty ? null : tools,
-      )) {
-        switch (delta) {
-          case ClawLlmTextDelta(:final text):
-            fullContent += text;
-            yield ClawAgentMessageChunkEvent(assistantId, text);
+      for (var round = 0; round < maxRounds; round++) {
+        final currentAssistantId =
+            isFirstAssistantMsg ? assistantId : _genId();
+        isFirstAssistantMsg = false;
 
-          case ClawLlmToolCallsDelta(:final toolCalls):
-            pendingToolCalls = toolCalls;
-            // 通知 UI：有工具调用待执行（状态 pending）
-            for (final tc in toolCalls) {
-              yield ClawAgentToolEvent(tc);
-            }
+        String fullContent = '';
+        String reasoningContent = '';
+        List<ClawToolCallRecord> pendingToolCalls = [];
 
-          case ClawLlmFinishDelta():
-            break;
+        await for (final delta in client.streamChat(
+          messages: apiMessages,
+          tools: toolDefs.isEmpty ? null : toolDefs,
+        )) {
+          switch (delta) {
+            case ClawLlmTextDelta(:final text):
+              fullContent += text;
+              yield ClawAgentMessageChunkEvent(currentAssistantId, text);
+            case ClawLlmReasoningDelta(:final text):
+              // 思考过程：显示给用户，同时单独保存用于回填 API
+              reasoningContent += text;
+              yield ClawAgentMessageChunkEvent(currentAssistantId, text);
+            case ClawLlmToolCallsDelta(:final toolCalls):
+              pendingToolCalls = toolCalls;
+              for (final tc in toolCalls) {
+                yield ClawAgentToolEvent(tc);
+              }
+            case ClawLlmFinishDelta():
+              break;
+          }
         }
+
+        yield ClawAgentMessageDoneEvent(
+          currentAssistantId,
+          toolCalls: pendingToolCalls,
+        );
+
+        // 把 assistant 本轮回复追加到 messages 供下一轮使用
+        // DeepSeek Reasoner 要求 assistant 消息必须带 reasoning_content 字段
+        final assistantEntry = <String, dynamic>{
+          'role': 'assistant',
+          'content': fullContent.isEmpty ? null : fullContent,
+        };
+        if (reasoningContent.isNotEmpty) {
+          assistantEntry['reasoning_content'] = reasoningContent;
+        }
+        if (pendingToolCalls.isNotEmpty) {
+          assistantEntry['tool_calls'] =
+              pendingToolCalls.map((tc) => tc.toApiJson()).toList();
+        }
+        apiMessages.add(assistantEntry);
+
+        // 无工具调用：对话结束
+        if (pendingToolCalls.isEmpty) {
+          yield ClawAgentDoneEvent(fullContent);
+          return;
+        }
+
+        // 依次执行所有工具
+        for (final tc in pendingToolCalls) {
+          final tool = toolMap[tc.name];
+          if (tool == null) {
+            const errMsg = 'Unknown tool';
+            apiMessages.add({
+              'role': 'tool',
+              'tool_call_id': tc.id,
+              'content': '[error] $errMsg: ${tc.name}',
+            });
+            yield ClawAgentToolEvent(
+                tc.copyWith(status: ClawToolStatus.error, result: errMsg));
+            continue;
+          }
+
+          yield ClawAgentToolEvent(tc.copyWith(status: ClawToolStatus.running));
+
+          try {
+            final result = await tool.execute(tc.args);
+            debugPrint('[dart_claw] tool ${tc.name} → ${result.substring(0, result.length.clamp(0, 200))}');
+            apiMessages.add({
+              'role': 'tool',
+              'tool_call_id': tc.id,
+              'content': result,
+            });
+            yield ClawAgentToolEvent(
+                tc.copyWith(status: ClawToolStatus.success, result: result));
+          } catch (e) {
+            final errMsg = 'Tool execution failed: $e';
+            debugPrint('[dart_claw] tool ${tc.name} error: $e');
+            apiMessages.add({
+              'role': 'tool',
+              'tool_call_id': tc.id,
+              'content': errMsg,
+            });
+            yield ClawAgentToolEvent(
+                tc.copyWith(status: ClawToolStatus.error, result: errMsg));
+          }
+        }
+
+        yield ClawAgentLogEvent('工具执行完毕，继续调用 ${client.modelId}…');
       }
 
-      yield ClawAgentMessageDoneEvent(assistantId, toolCalls: pendingToolCalls);
-
-      if (pendingToolCalls.isEmpty) {
-        // 纯文本回复，本轮结束
-        yield ClawAgentDoneEvent(fullContent);
-      } else {
-        // TODO(阶段三)：依次执行工具 → 回填结果 → 再次调用 LLM → 循环
-        yield ClawAgentDoneEvent('工具调用已解析，执行能力将在阶段三实现。');
-      }
+      yield ClawAgentErrorEvent('已执行 $maxRounds 轮工具调用，自动终止。');
     } on ClawLlmException catch (e) {
       yield ClawAgentErrorEvent('LLM 调用失败（${e.statusCode}）：${e.message}');
     } catch (e, st) {

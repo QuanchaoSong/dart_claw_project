@@ -11,6 +11,13 @@ class ClawLlmTextDelta extends ClawLlmDelta {
   const ClawLlmTextDelta(this.text);
 }
 
+/// LLM 的思考过程片段（DeepSeek Reasoner 等模型 reasoning_content）
+/// 与正文分开，以便回填 assistant 消息时放入正确字段
+class ClawLlmReasoningDelta extends ClawLlmDelta {
+  final String text;
+  const ClawLlmReasoningDelta(this.text);
+}
+
 /// 流结束后，完整组装好的 tool_calls 列表
 class ClawLlmToolCallsDelta extends ClawLlmDelta {
   final List<ClawToolCallRecord> toolCalls;

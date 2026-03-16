@@ -1,8 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
-
 import '../model/tool_call_record.dart';
 import 'claw_llm_delta.dart';
 
@@ -85,7 +83,7 @@ class ClawLlmClient {
         }
 
         for (final line in lines) {
-          // debugPrint('[llm] raw: $line');
+
           if (!line.startsWith('data: ')) continue;
           final data = line.substring(6).trim();
 
@@ -117,7 +115,7 @@ class ClawLlmClient {
             // 思考内容（DeepSeek Reasoner 等模型的推理过程）
             final reasoning = delta['reasoning_content'] as String?;
             if (reasoning != null && reasoning.isNotEmpty) {
-              yield ClawLlmTextDelta(reasoning);
+              yield ClawLlmReasoningDelta(reasoning);
             }
 
             // 正式回复文本
@@ -147,8 +145,8 @@ class ClawLlmClient {
               yield const ClawLlmFinishDelta('tool_calls');
               return;
             }
-          } catch (e) {
-            debugPrint('[llm] parse error: $e  raw=$data');
+          } catch (_) {
+            // 忽略格式异常的 chunk（partial JSON、ping 事件等）
           }
         }
       }
