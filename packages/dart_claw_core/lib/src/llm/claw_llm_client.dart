@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
+
 import '../model/tool_call_record.dart';
 import 'claw_llm_delta.dart';
 
@@ -52,7 +54,8 @@ class ClawLlmClient {
       };
       if (tools != null && tools.isNotEmpty) body['tools'] = tools;
 
-      request.write(jsonEncode(body));
+      // 必须用 add(utf8.encode(...)) 写字节，request.write() 走 Latin-1 会崩汉字
+      request.add(utf8.encode(jsonEncode(body)));
       final response = await request.close();
 
       if (response.statusCode != 200) {
@@ -82,6 +85,7 @@ class ClawLlmClient {
         }
 
         for (final line in lines) {
+          // debugPrint('[llm] raw: $line');
           if (!line.startsWith('data: ')) continue;
           final data = line.substring(6).trim();
 
@@ -110,7 +114,13 @@ class ClawLlmClient {
 
             final finishReason = choice['finish_reason'] as String?;
 
-            // 文本 chunk
+            // 思考内容（DeepSeek Reasoner 等模型的推理过程）
+            final reasoning = delta['reasoning_content'] as String?;
+            if (reasoning != null && reasoning.isNotEmpty) {
+              yield ClawLlmTextDelta(reasoning);
+            }
+
+            // 正式回复文本
             final content = delta['content'] as String?;
             if (content != null && content.isNotEmpty) {
               yield ClawLlmTextDelta(content);
@@ -137,8 +147,8 @@ class ClawLlmClient {
               yield const ClawLlmFinishDelta('tool_calls');
               return;
             }
-          } catch (_) {
-            // 忽略格式异常的 chunk（partial JSON、ping 事件等）
+          } catch (e) {
+            debugPrint('[llm] parse error: $e  raw=$data');
           }
         }
       }

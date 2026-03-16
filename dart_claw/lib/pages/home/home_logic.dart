@@ -1,8 +1,28 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:dart_claw/others/services/app_config_service.dart';
 import 'package:dart_claw_core/dart_claw_core.dart';
 import 'package:get/get.dart';
 
-class HomeLogic extends GetxController {
+class HomeLogic extends GetxController {  // ─── 输入框 & 滚动控制器 ───────────────────────────────────────────────
+
+  final inputController = TextEditingController();
+  final scrollController = ScrollController();
+
+  @override
+  void onClose() {
+    inputController.dispose();
+    scrollController.dispose();
+    super.onClose();
+  }
+
+  /// 从输入框取文本发送，发送后清空输入框（由 UI 层调用）
+  void submitInput() {
+    final text = inputController.text.trim();
+    if (text.isEmpty) return;
+    inputController.clear();
+    sendMessage(text);
+  }
   // ─── 面板显示 ─────────────────────────────────────────────────────────────
 
   final showInfoPanel = true.obs;
@@ -42,6 +62,7 @@ class HomeLogic extends GetxController {
     messages.add(assistantMsg);
 
     isRunning.value = true;
+    _scrollToBottom();
 
     _runAgent(content.trim(), assistantMsg.id, history);
   }
@@ -53,6 +74,7 @@ class HomeLogic extends GetxController {
     switch (event) {
       case ClawAgentMessageChunkEvent(:final messageId, :final chunk):
         _appendChunk(messageId, chunk);
+        _scrollToBottom();
 
       case ClawAgentMessageDoneEvent(:final messageId, :final toolCalls):
         _finalizeMessage(messageId, toolCalls: toolCalls);
@@ -112,24 +134,65 @@ class HomeLogic extends GetxController {
     }
   }
 
-  void _appendError(String message) {
+  void _appendError(String fullMessage) {
+    // 1. 移除 assistant 占位消息（不在聊天中展示错误）
     if (streamingMessageId != null) {
-      final idx = messages.indexWhere((m) => m.id == streamingMessageId);
-      if (idx != -1) {
-        messages[idx] = messages[idx].copyWith(
-          content: message,
-          status: ClawChatMessageStatus.error,
-        );
-        return;
-      }
+      messages.removeWhere((m) => m.id == streamingMessageId);
     }
-    messages.add(ClawChatMessage(
-      id: DateTime.now().microsecondsSinceEpoch.toRadixString(36),
-      role: ClawChatMessageRole.assistant,
-      timestamp: DateTime.now(),
-      status: ClawChatMessageStatus.error,
-      content: message,
-    ));
+
+    // 2. 完整错误信息打印到控制台，方便复制调试
+    debugPrint('[dart_claw] ❌ Agent error:\n$fullMessage');
+
+    // 3. 弹窗展示（可滚动，方便阅读）
+    Get.dialog(
+      AlertDialog(
+        backgroundColor: const Color(0xFF1A1F3A),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Colors.red, width: 0.5),
+        ),
+        title: const Text(
+          'Error',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+        content: SizedBox(
+          width: 480,
+          child: SingleChildScrollView(
+            child: Text(
+              fullMessage,
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 12,
+                fontFamily: 'monospace',
+                height: 1.5,
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: Get.back,
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 当前配置的模型名称（用于 Info 面板显示）
+  String get currentModelId =>
+      AppConfigService.shared.config.value.model.modelId;
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (scrollController.hasClients) {
+        scrollController.animateTo(
+          scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOut,
+        );
+      }
+    });
   }
 
   /// 使用 [ClawAgentRunner] 运行一轮 Agent 对话

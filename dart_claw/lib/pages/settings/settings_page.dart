@@ -390,7 +390,7 @@ class SettingsPage extends StatelessWidget {
             hintText: '4096',
             keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            onChanged: (v) => logic.maxTokens.value = int.tryParse(v) ?? 4096,
+            // onChanged: (v) => logic.maxTokens.value = int.tryParse(v) ?? 4096,
           ),
         ),
 
