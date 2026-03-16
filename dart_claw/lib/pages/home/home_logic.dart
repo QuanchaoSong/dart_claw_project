@@ -1,3 +1,4 @@
+import 'package:dart_claw/others/services/app_config_service.dart';
 import 'package:dart_claw_core/dart_claw_core.dart';
 import 'package:get/get.dart';
 
@@ -28,6 +29,9 @@ class HomeLogic extends GetxController {
     if (content.trim().isEmpty) return;
     if (isRunning.value) return;
 
+    // 历史消息快照（不含即将添加的新消息）
+    final history = List<ClawChatMessage>.from(messages);
+
     // 1. 添加用户消息气泡
     final userMsg = ClawChatMessage.user(content.trim());
     messages.add(userMsg.copyWith(status: ClawChatMessageStatus.done));
@@ -39,9 +43,7 @@ class HomeLogic extends GetxController {
 
     isRunning.value = true;
 
-    // TODO(阶段二)：调用 ClawAgentRunner，订阅 Stream<ClawAgentEvent> 更新消息列表
-    // 暂时用 stub 模拟，验证 UI 链路
-    _stubResponse(assistantMsg.id);
+    _runAgent(content.trim(), assistantMsg.id, history);
   }
 
   // ─── 事件处理 ─────────────────────────────────────────────────────────────
@@ -130,16 +132,29 @@ class HomeLogic extends GetxController {
     ));
   }
 
-  /// Stub：模拟一次流式响应，验证 UI 链路（阶段二删除）
-  Future<void> _stubResponse(String messageId) async {
-    const reply = 'Hello! I am dart Claw. '
-        'The LLM integration will be wired up in Phase 2.';
-    for (final char in reply.split('')) {
-      await Future.delayed(const Duration(milliseconds: 30));
-      handleEvent(ClawAgentMessageChunkEvent(messageId, char));
+  /// 使用 [ClawAgentRunner] 运行一轮 Agent 对话
+  Future<void> _runAgent(
+    String userMessage,
+    String assistantMsgId,
+    List<ClawChatMessage> history,
+  ) async {
+    final cfg = AppConfigService.shared.config.value;
+    final client = ClawLlmClient(
+      baseUrl: cfg.model.effectiveBaseUrl,
+      apiKey: cfg.model.apiKey,
+      modelId: cfg.model.modelId,
+      temperature: cfg.model.temperature,
+      maxTokens: cfg.model.maxTokens,
+    );
+    final runner = ClawAgentRunner(client: client);
+
+    await for (final event in runner.run(
+      userMessage: userMessage,
+      history: history,
+      assistantMessageId: assistantMsgId,
+    )) {
+      handleEvent(event);
     }
-    handleEvent(ClawAgentMessageDoneEvent(messageId));
-    handleEvent(ClawAgentDoneEvent('Stub response complete.'));
   }
 
 }

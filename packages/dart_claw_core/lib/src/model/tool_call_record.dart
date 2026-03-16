@@ -1,4 +1,4 @@
-/// 工具执行状态
+import 'dart:convert';
 enum ClawToolStatus {
   /// 等待执行（tool_call 已解析，尚未开始）
   pending,
@@ -67,7 +67,7 @@ class ClawToolCallRecord {
       'type': 'function',
       'function': {
         'name': name,
-        'arguments': _encodeArgs(args),
+        'arguments': jsonEncode(args),
       },
     };
   }
@@ -82,20 +82,3 @@ class ClawToolCallRecord {
   }
 }
 
-String _encodeArgs(Map<String, dynamic> args) {
-  // 简单 JSON 序列化，不引入 dart:convert 以外的依赖
-  final buf = StringBuffer('{');
-  var first = true;
-  args.forEach((k, v) {
-    if (!first) buf.write(',');
-    first = false;
-    buf.write('"$k":');
-    if (v is String) {
-      buf.write('"${v.replaceAll('"', '\\"')}"');
-    } else {
-      buf.write(v);
-    }
-  });
-  buf.write('}');
-  return buf.toString();
-}
