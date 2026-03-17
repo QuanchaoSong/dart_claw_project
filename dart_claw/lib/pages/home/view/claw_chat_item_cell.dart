@@ -34,7 +34,7 @@ class _ClawChatItemCellState extends State<ClawChatItemCell> {
     final isStreaming = msg.status == ClawChatMessageStatus.streaming;
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 16, right: 60),
+      padding: const EdgeInsets.only(bottom: 16, right: 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -410,6 +410,20 @@ class _ConfirmCard extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 8),
+          // 次级入口：打开 Session Info 面板设置全局放行
+          GestureDetector(
+            onTap: () => Get.find<HomeLogic>().toggleInfoPanel(),
+            child: const Text(
+              'Always allow for this session →',
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.amber,
+                decoration: TextDecoration.underline,
+                decorationColor: Colors.amber,
+              ),
+            ),
           ),
         ],
       ),

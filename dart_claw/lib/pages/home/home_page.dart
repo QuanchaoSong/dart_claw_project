@@ -1,5 +1,6 @@
 import 'package:dart_claw/pages/home/home_logic.dart';
 import 'package:dart_claw/pages/home/view/claw_chat_item_cell.dart';
+import 'package:dart_claw/pages/home/view/session_info_and_settings_view.dart';
 import 'package:dart_claw/pages/home/view/user_chat_item_cell.dart';
 import 'package:dart_claw/pages/settings/settings_page.dart';
 import 'package:dart_claw_core/dart_claw_core.dart';
@@ -33,8 +34,8 @@ class HomePage extends StatelessWidget {
             // 右侧信息面板
             Obx(
               () => logic.showInfoPanel.value
-                  ? _buildInfoPanel()
-                  : SizedBox.shrink(),
+                  ? const SessionInfoAndSettingsView()
+                  : const SizedBox.shrink(),
             ),
           ],
         ),
@@ -165,10 +166,36 @@ class HomePage extends StatelessWidget {
                       ),
                     ),
                     Spacer(),
-                    IconButton(
-                      icon: Icon(Icons.info_outline, color: Colors.white54),
-                      onPressed: () => logic.toggleInfoPanel(),
-                    ),
+                    Obx(() {
+                      final hasAllowAll = logic.allowAllTools.value;
+                      return Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          IconButton(
+                            icon: Icon(
+                              Icons.info_outline,
+                              color: hasAllowAll
+                                  ? Colors.amber
+                                  : Colors.white54,
+                            ),
+                            onPressed: () => logic.toggleInfoPanel(),
+                          ),
+                          if (hasAllowAll)
+                            Positioned(
+                              top: 6,
+                              right: 6,
+                              child: Container(
+                                width: 8,
+                                height: 8,
+                                decoration: const BoxDecoration(
+                                  color: Colors.amber,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ),
+                        ],
+                      );
+                    }),
                   ],
                 ),
               ),
@@ -267,83 +294,6 @@ class HomePage extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildInfoPanel() {
-    return Container(
-      width: 280,
-      margin: EdgeInsets.only(right: 16, top: 16, bottom: 16),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          width: double.infinity,
-          height: double.infinity,
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withOpacity(0.08)),
-          ),
-          child: Padding(
-            padding: EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Info',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.white,
-                      ),
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.close, color: Colors.white54, size: 20),
-                      onPressed: () => logic.toggleInfoPanel(),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 16),
-                Obx(() => Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildInfoItem('Model', logic.currentModelId),
-                    _buildInfoItem('Tokens', '—'),
-                    _buildInfoItem(
-                      'Status',
-                      logic.isRunning.value ? 'Thinking…' : 'Ready',
-                    ),
-                  ],
-                )),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInfoItem(String label, String value) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: TextStyle(fontSize: 12, color: Colors.white54)),
-          SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.white,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
       ),
     );
   }

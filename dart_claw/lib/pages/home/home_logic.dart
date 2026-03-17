@@ -31,6 +31,15 @@ class HomeLogic extends GetxController {  // ─── 输入框 & 滚动控制�
     showInfoPanel.value = !showInfoPanel.value;
   }
 
+  // ─── Session 级别设置 ──────────────────────────────────────────────────────
+
+  /// 当前 session 内所有危险工具都自动放行（无需逐次确认）
+  final allowAllTools = false.obs;
+
+  void setAllowAllTools(bool value) {
+    allowAllTools.value = value;
+  }
+
   // ─── 消息列表 ─────────────────────────────────────────────────────────────
 
   /// 当前会话的消息列表，UI 层用 Obx 监听
@@ -90,10 +99,15 @@ class HomeLogic extends GetxController {  // ─── 输入框 & 滚动控制�
       case ClawAgentToolEvent(:final record):
         _upsertToolRecord(record);
 
-      case ClawAgentConfirmRequestEvent():
-        // 工具 block 已经通过 ClawAgentToolEvent 更新为 awaitingConfirmation 状态
-        // 戒需额外操作，UI 会自动显示内嵌确认卡片
-        _scrollToBottom();
+      case ClawAgentConfirmRequestEvent(:final requestId):
+        if (allowAllTools.value) {
+          // Session 级别「全部放行」开启时，自动确认无需用户介入
+          _activeRunner?.confirm(requestId, allow: true);
+        } else {
+          // 工具 block 已通过 ClawAgentToolEvent 更新为 awaitingConfirmation
+          // UI 会自动显示内嵌确认卡片
+          _scrollToBottom();
+        }
         break;
 
       case ClawAgentDoneEvent():
