@@ -144,6 +144,9 @@ class ClawChatMessage {
   }
 
   /// 转为 LLM API 所需的 messages 格式（OpenAI 兼容）
+  ///
+  /// 对于 assistant 消息，始终只返回单条（当前 block 的快照）。
+  /// 如果需要完整的多轮序列（含 tool result messages），请用 [toApiMessages]。
   Map<String, dynamic> toApiJson() {
     final contentStr = content;
     final base = <String, dynamic>{'role': role.name};
@@ -158,6 +161,77 @@ class ClawChatMessage {
     }
 
     return base;
+  }
+
+  /// 将本条消息展开为 API 所需的完整 message 序列。
+  ///
+  /// - user / system 消息：返回单条
+  /// - assistant 消息：按 block 顺序重建多轮结构，每轮 assistant 消息后紧跟工具结果消息
+  ///   Example blocks → API sequence:
+  ///   [ReasoningBlock, ContentBlock, ToolCallBlock(tc1), ToolCallBlock(tc2),
+  ///    ReasoningBlock, ContentBlock]
+  ///   →
+  ///   {assistant, reasoning, content, tool_calls:[tc1,tc2]}
+  ///   {tool, tool_call_id:tc1.id, content:...}
+  ///   {tool, tool_call_id:tc2.id, content:...}
+  ///   {assistant, reasoning, content}
+  List<Map<String, dynamic>> toApiMessages() {
+    if (role != ClawChatMessageRole.assistant) return [toApiJson()];
+
+    final result = <Map<String, dynamic>>[];
+
+    String currentContent = '';
+    String currentReasoning = '';
+    final currentToolCalls = <ClawToolCallRecord>[];
+    bool hasContent = false;
+    bool inToolPhase = false;
+
+    void flushRound() {
+      if (!hasContent) return;
+      final msg = <String, dynamic>{'role': 'assistant'};
+      if (currentContent.isNotEmpty) msg['content'] = currentContent;
+      if (currentReasoning.isNotEmpty) {
+        msg['reasoning_content'] = currentReasoning;
+      }
+      if (currentToolCalls.isNotEmpty) {
+        msg['tool_calls'] =
+            currentToolCalls.map((t) => t.toApiJson()).toList();
+      }
+      result.add(msg);
+      for (final tc in currentToolCalls) {
+        result.add(tc.toResultApiJson());
+      }
+      currentContent = '';
+      currentReasoning = '';
+      currentToolCalls.clear();
+      hasContent = false;
+    }
+
+    for (final block in blocks) {
+      switch (block) {
+        case ClawReasoningBlock():
+          if (inToolPhase) {
+            flushRound();
+            inToolPhase = false;
+          }
+          currentReasoning += block.content;
+          hasContent = true;
+        case ClawContentBlock():
+          if (inToolPhase) {
+            flushRound();
+            inToolPhase = false;
+          }
+          currentContent += block.content;
+          hasContent = true;
+        case ClawToolCallBlock():
+          inToolPhase = true;
+          currentToolCalls.add(block.record);
+          hasContent = true;
+      }
+    }
+    flushRound();
+
+    return result;
   }
 }
 

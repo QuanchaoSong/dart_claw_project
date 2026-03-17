@@ -36,6 +36,10 @@ class ClawToolCallRecord {
   /// 是否属于高危操作（需要用户确认）
   final bool isDangerous;
 
+  /// 等待用户确认时的请求 ID（对应 ClawAgentRunner._pendingConfirms 的 key）
+  /// null 表示不需要确认或已结束确认流程
+  final String? confirmRequestId;
+
   const ClawToolCallRecord({
     required this.id,
     required this.name,
@@ -43,12 +47,14 @@ class ClawToolCallRecord {
     this.result,
     this.status = ClawToolStatus.pending,
     this.isDangerous = false,
+    this.confirmRequestId,
   });
 
   ClawToolCallRecord copyWith({
     String? result,
     ClawToolStatus? status,
     bool? isDangerous,
+    String? confirmRequestId,
   }) {
     return ClawToolCallRecord(
       id: id,
@@ -57,6 +63,7 @@ class ClawToolCallRecord {
       result: result ?? this.result,
       status: status ?? this.status,
       isDangerous: isDangerous ?? this.isDangerous,
+      confirmRequestId: confirmRequestId ?? this.confirmRequestId,
     );
   }
 

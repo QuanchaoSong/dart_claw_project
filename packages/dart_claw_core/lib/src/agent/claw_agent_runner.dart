@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../llm/claw_llm_client.dart';
@@ -41,6 +43,15 @@ IMPORTANT RULES:
               SearchInFileTool(),
             ];
 
+  /// 等待用户确认的 Completer 映射表（requestId → Completer<bool>）
+  final Map<String, Completer<bool>> _pendingConfirms = {};
+
+  /// UI 层调用：用户对确认请求给出答复
+  /// [allow] = true 表示允许，false 表示拒绝
+  void confirm(String requestId, {required bool allow}) {
+    _pendingConfirms[requestId]?.complete(allow);
+  }
+
   /// 运行 Agent 对话：LLM → 工具执行 → 再次 LLM → 循环，最多 [maxRounds] 轮
   Stream<ClawAgentEvent> run({
     required String userMessage,
@@ -56,7 +67,8 @@ IMPORTANT RULES:
     final apiMessages = <Map<String, dynamic>>[
       {'role': 'system', 'content': _systemPrompt},
       for (final msg in history)
-        if (msg.role != ClawChatMessageRole.system) msg.toApiJson(),
+        if (msg.role != ClawChatMessageRole.system)
+          ...msg.toApiMessages(),
       {'role': 'user', 'content': userMessage},
     ];
 
@@ -142,6 +154,35 @@ IMPORTANT RULES:
             yield ClawAgentToolEvent(
                 tc.copyWith(status: ClawToolStatus.error, result: errMsg));
             continue;
+          }
+
+          // 高危操作：先暂停并等待用户确认
+          if (tool.isDangerous) {
+            final requestId = _genId();
+            final completer = Completer<bool>();
+            _pendingConfirms[requestId] = completer;
+
+            // 更新 block 状态为 awaitingConfirmation，并嵌入 requestId 供 UI 使用
+            yield ClawAgentToolEvent(tc.copyWith(
+              status: ClawToolStatus.awaitingConfirmation,
+              confirmRequestId: requestId,
+            ));
+            yield ClawAgentConfirmRequestEvent(requestId, tc.name, tc);
+
+            final allowed = await completer.future;
+            _pendingConfirms.remove(requestId);
+
+            if (!allowed) {
+              const denial = 'Denied by user';
+              apiMessages.add({
+                'role': 'tool',
+                'tool_call_id': tc.id,
+                'content': '[denied by user]',
+              });
+              yield ClawAgentToolEvent(
+                  tc.copyWith(status: ClawToolStatus.error, result: denial));
+              continue;
+            }
           }
 
           yield ClawAgentToolEvent(tc.copyWith(status: ClawToolStatus.running));

@@ -24,7 +24,7 @@ class ClawReasoningBlock extends ClawChatBlock {
       );
 
   ClawReasoningBlock appendChunk(String chunk) =>
-      copyWith(content: this.content + chunk);
+      copyWith(content: content + chunk);
 
   ClawReasoningBlock finalize() => copyWith(isStreaming: false);
 }
@@ -47,7 +47,7 @@ class ClawContentBlock extends ClawChatBlock {
       );
 
   ClawContentBlock appendChunk(String chunk) =>
-      copyWith(content: this.content + chunk);
+      copyWith(content: content + chunk);
 
   ClawContentBlock finalize() => copyWith(isStreaming: false);
 }

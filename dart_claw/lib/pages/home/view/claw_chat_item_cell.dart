@@ -1,5 +1,7 @@
+import 'package:dart_claw/pages/home/home_logic.dart';
 import 'package:dart_claw_core/dart_claw_core.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
 /// AI 助手消息气泡
 ///
@@ -257,6 +259,11 @@ class _ToolCallCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 高危操作等待确认——内嵌确认卡片
+    if (record.status == ClawToolStatus.awaitingConfirmation) {
+      return _ConfirmCard(record: record);
+    }
+
     final (statusColor, statusIcon) = _statusStyle(record.status);
 
     final subtitle = record.args['command'] as String? ??
@@ -318,4 +325,130 @@ class _ToolCallCard extends StatelessWidget {
           (Colors.amber, Icons.warning_amber_outlined),
         ClawToolStatus.pending => (Colors.white54, Icons.schedule),
       };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────
+// 内嵌确认卡片（高危操作等待用户确认时显示）
+// ─────────────────────────────────────────────────────────────────────────────────
+
+class _ConfirmCard extends StatelessWidget {
+  const _ConfirmCard({required this.record});
+
+  final ClawToolCallRecord record;
+
+  @override
+  Widget build(BuildContext context) {
+    final subtitle = record.args['command'] as String? ??
+        record.args['path'] as String? ??
+        record.args['pattern'] as String?;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.amber.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.amber.withOpacity(0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 标题行
+          Row(
+            children: [
+              const Icon(
+                Icons.warning_amber_rounded,
+                size: 14,
+                color: Colors.amber,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                record.name,
+                style: const TextStyle(
+                  color: Colors.amber,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  fontFamily: 'monospace',
+                ),
+              ),
+            ],
+          ),
+          // 参数行
+          if (subtitle != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: const TextStyle(
+                color: Colors.white54,
+                fontSize: 11,
+                fontFamily: 'monospace',
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+          const SizedBox(height: 10),
+          // Allow / Deny 按钒
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _ConfirmButton(
+                label: 'Allow',
+                color: const Color(0xFF6366F1),
+                onTap: () => Get.find<HomeLogic>().confirmTool(
+                  record.confirmRequestId!,
+                  allow: true,
+                ),
+              ),
+              const SizedBox(width: 8),
+              _ConfirmButton(
+                label: 'Deny',
+                color: Colors.red.shade700,
+                onTap: () => Get.find<HomeLogic>().confirmTool(
+                  record.confirmRequestId!,
+                  allow: false,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ConfirmButton extends StatelessWidget {
+  const _ConfirmButton({
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.18),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: color.withOpacity(0.5)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: color,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
 }
