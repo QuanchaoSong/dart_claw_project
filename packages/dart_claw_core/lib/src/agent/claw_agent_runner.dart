@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../llm/claw_llm_client.dart';
 import '../llm/claw_llm_delta.dart';
 import '../model/agent_event.dart';
+import '../model/chat_block.dart';
 import '../model/chat_message.dart';
 import '../model/tool_call_record.dart';
 import '../tools/builtin_tools.dart';
@@ -68,15 +69,28 @@ IMPORTANT RULES:
         String reasoningContent = '';
         List<ClawToolCallRecord> pendingToolCalls = [];
 
+        // 追踪当前 block 类型，发生切换时先 emit NewBlockEvent
+        ClawChatBlockType? lastBlockType;
+
         await for (final delta in client.streamChat(
           messages: apiMessages,
           tools: toolDefs.isEmpty ? null : toolDefs,
         )) {
           switch (delta) {
             case ClawLlmTextDelta(:final text):
+              if (lastBlockType != ClawChatBlockType.content) {
+                yield ClawAgentNewBlockEvent(
+                    assistantId, ClawChatBlockType.content);
+                lastBlockType = ClawChatBlockType.content;
+              }
               fullContent += text;
               yield ClawAgentMessageChunkEvent(assistantId, text);
             case ClawLlmReasoningDelta(:final text):
+              if (lastBlockType != ClawChatBlockType.reasoning) {
+                yield ClawAgentNewBlockEvent(
+                    assistantId, ClawChatBlockType.reasoning);
+                lastBlockType = ClawChatBlockType.reasoning;
+              }
               reasoningContent += text;
               yield ClawAgentReasoningChunkEvent(assistantId, text);
             case ClawLlmToolCallsDelta(:final toolCalls):

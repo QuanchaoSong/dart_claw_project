@@ -1,3 +1,4 @@
+import 'chat_block.dart';
 import 'tool_call_record.dart';
 
 /// Agent loop 向外发出的事件流
@@ -24,6 +25,13 @@ class ClawAgentReasoningChunkEvent extends ClawAgentEvent {
   final String messageId;
   final String chunk;
   ClawAgentReasoningChunkEvent(this.messageId, this.chunk);
+}
+
+/// Runner 开始产生新 block（reasoning 或 content），UI 应在消息中追加对应空 block
+class ClawAgentNewBlockEvent extends ClawAgentEvent {
+  final String messageId;
+  final ClawChatBlockType blockType;
+  ClawAgentNewBlockEvent(this.messageId, this.blockType);
 }
 
 /// LLM 当前这轮输出完毕（流式结束），附带完整 tool_calls（如有）

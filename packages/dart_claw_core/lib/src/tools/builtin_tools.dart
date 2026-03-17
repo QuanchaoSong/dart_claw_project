@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'claw_tool.dart';
 
@@ -43,6 +44,8 @@ class RunCommandTool implements ClawTool {
   Future<String> execute(Map<String, dynamic> args) async {
     final command = args['command'] as String;
     final workingDir = args['working_dir'] as String?;
+
+    debugPrint('Executing command: $command (working dir: ${workingDir ?? "home"})');
 
     final result = await Process.run(
       'bash',

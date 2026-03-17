@@ -54,7 +54,7 @@ class HomeLogic extends GetxController {  // ─── 输入框 & 滚动控制�
 
     // 1. 添加用户消息气泡
     final userMsg = ClawChatMessage.user(content.trim());
-    messages.add(userMsg.copyWith(status: ClawChatMessageStatus.done));
+    messages.add(userMsg);
 
     // 2. 添加 assistant 占位气泡（流式输出用）
     final assistantMsg = ClawChatMessage.assistantStreaming();
@@ -72,6 +72,10 @@ class HomeLogic extends GetxController {  // ─── 输入框 & 滚动控制�
   /// 处理来自 ClawAgentRunner 的事件（阶段二实现，目前为 stub）
   void handleEvent(ClawAgentEvent event) {
     switch (event) {
+      case ClawAgentNewBlockEvent(:final messageId, :final blockType):
+        _addBlock(messageId, blockType);
+        _scrollToBottom();
+
       case ClawAgentMessageChunkEvent(:final messageId, :final chunk):
         _appendChunk(messageId, chunk);
         _scrollToBottom();
@@ -107,6 +111,16 @@ class HomeLogic extends GetxController {  // ─── 输入框 & 滚动控制�
 
   // ─── 私有辅助 ─────────────────────────────────────────────────────────────
 
+  void _addBlock(String messageId, ClawChatBlockType blockType) {
+    final idx = messages.indexWhere((m) => m.id == messageId);
+    if (idx == -1) return;
+    final block = switch (blockType) {
+      ClawChatBlockType.reasoning => const ClawReasoningBlock(),
+      ClawChatBlockType.content => const ClawContentBlock(),
+    };
+    messages[idx] = messages[idx].addBlock(block);
+  }
+
   void _appendChunk(String messageId, String chunk) {
     final idx = messages.indexWhere((m) => m.id == messageId);
     if (idx == -1) return;
@@ -125,23 +139,16 @@ class HomeLogic extends GetxController {  // ─── 输入框 & 滚动控制�
   }) {
     final idx = messages.indexWhere((m) => m.id == messageId);
     if (idx == -1) return;
-    messages[idx] = messages[idx]
-        .finalize()
-        .copyWith(toolCalls: toolCalls);
+    // tool blocks are already in blocks via _upsertToolRecord; just finalize
+    messages[idx] = messages[idx].finalize();
   }
 
   void _upsertToolRecord(ClawToolCallRecord record) {
-    // 找到关联的 assistant 消息并更新其 toolCalls 列表
-    for (var i = 0; i < messages.length; i++) {
-      final msg = messages[i];
-      if (msg.role != ClawChatMessageRole.assistant) continue;
-      final idx = msg.toolCalls.indexWhere((t) => t.id == record.id);
-      if (idx == -1) continue;
-      final updated = List<ClawToolCallRecord>.from(msg.toolCalls);
-      updated[idx] = record;
-      messages[i] = msg.copyWith(toolCalls: updated);
-      return;
-    }
+    // Tool calls always belong to the current streaming assistant message
+    if (streamingMessageId == null) return;
+    final idx = messages.indexWhere((m) => m.id == streamingMessageId);
+    if (idx == -1) return;
+    messages[idx] = messages[idx].updateToolBlock(record);
   }
 
   void _appendError(String fullMessage) {

@@ -1,10 +1,10 @@
 import 'package:dart_claw_core/dart_claw_core.dart';
 import 'package:flutter/material.dart';
 
-/// AI 助手消息气泡，包含：
-/// - 可折叠的 reasoning（思考）区块
-/// - 正文内容
-/// - 工具调用卡片列表
+/// AI 助手消息气泡
+///
+/// 渲染 [ClawChatMessage.blocks] 有序列表，支持多轮 reasoning / content / tool call
+/// 依次追加，互不覆盖。每个 reasoning block 独立管理展开/收起状态。
 class ClawChatItemCell extends StatefulWidget {
   const ClawChatItemCell({super.key, required this.msg});
 
@@ -15,137 +15,141 @@ class ClawChatItemCell extends StatefulWidget {
 }
 
 class _ClawChatItemCellState extends State<ClawChatItemCell> {
-  bool _reasoningExpanded = true;
-  bool _userToggledReasoning = false;
+  /// index → 用户是否主动覆盖了展开状态（null = 跟随 block.isStreaming 默认行为）
+  final Map<int, bool> _expandOverride = {};
 
-  @override
-  void didUpdateWidget(ClawChatItemCell old) {
-    super.didUpdateWidget(old);
-    // 流式结束后自动折叠，除非用户主动点击过
-    if (!_userToggledReasoning) {
-      final nowStreaming =
-          widget.msg.status == ClawChatMessageStatus.streaming;
-      if (_reasoningExpanded != nowStreaming) {
-        setState(() => _reasoningExpanded = nowStreaming);
-      }
-    }
-  }
+  bool _isExpanded(int index, bool blockIsStreaming) =>
+      _expandOverride[index] ?? blockIsStreaming;
 
-  void _toggleReasoning() {
-    setState(() {
-      _userToggledReasoning = true;
-      _reasoningExpanded = !_reasoningExpanded;
-    });
+  void _toggleExpand(int index, bool currentExpanded) {
+    setState(() => _expandOverride[index] = !currentExpanded);
   }
 
   @override
   Widget build(BuildContext context) {
     final msg = widget.msg;
-    final isStreaming = msg.status == ClawChatMessageStatus.streaming;
     final isError = msg.status == ClawChatMessageStatus.error;
+    final isStreaming = msg.status == ClawChatMessageStatus.streaming;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 16, right: 60),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Avatar
-          Container(
-            width: 32,
-            height: 32,
-            margin: const EdgeInsets.only(right: 10, top: 2),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
-              ),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Center(
-              child: Text('🦞', style: TextStyle(fontSize: 16)),
-            ),
-          ),
-
-          Flexible(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ── Reasoning 折叠块 ──────────────────────────────────────
-                if (msg.reasoningContent.isNotEmpty)
-                  _ReasoningBlock(
-                    reasoning: msg.reasoningContent,
-                    isStreaming: isStreaming,
-                    isExpanded: _reasoningExpanded,
-                    onToggle: _toggleReasoning,
-                  ),
-
-                // ── 正文气泡 ──────────────────────────────────────────────
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: isError
-                        ? Colors.red.withOpacity(0.12)
-                        : Colors.white.withOpacity(0.06),
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(4),
-                      topRight: Radius.circular(16),
-                      bottomLeft: Radius.circular(16),
-                      bottomRight: Radius.circular(16),
-                    ),
-                    border: Border.all(
-                      color: isError
-                          ? Colors.red.withOpacity(0.3)
-                          : Colors.white.withOpacity(0.08),
-                    ),
-                  ),
-                  child: _buildMainContent(msg, isStreaming, isError),
-                ),
-
-                // ── 工具调用卡片 ──────────────────────────────────────────
-                if (msg.toolCalls.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  for (final tc in msg.toolCalls) _ToolCallCard(record: tc),
-                ],
-              ],
-            ),
-          ),
+          // 显示所有 blocks（顺序渲染）
+          if (msg.blocks.isEmpty && isStreaming)
+            _loadingDots()
+          else
+            for (var i = 0; i < msg.blocks.length; i++)
+              _buildBlock(msg.blocks[i], i, isError, isStreaming),
         ],
       ),
     );
   }
 
-  Widget _buildMainContent(
-      ClawChatMessage msg, bool isStreaming, bool isError) {
-    // 只有在完全没有任何内容时才显示三点 loading
-    if (isStreaming &&
-        msg.content.isEmpty &&
-        msg.reasoningContent.isEmpty) {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: List.generate(
-          3,
-          (_) => Container(
-            width: 6,
-            height: 6,
-            margin: const EdgeInsets.symmetric(horizontal: 2),
-            decoration: const BoxDecoration(
-              color: Colors.white38,
-              shape: BoxShape.circle,
+  Widget _buildBlock(
+      ClawChatBlock block, int index, bool isError, bool msgStreaming) {
+    return switch (block) {
+      ClawReasoningBlock() => Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: _ReasoningBlock(
+            reasoning: block.content,
+            isStreaming: block.isStreaming,
+            isExpanded: _isExpanded(index, block.isStreaming),
+            onToggle: () =>
+                _toggleExpand(index, _isExpanded(index, block.isStreaming)),
+          ),
+        ),
+      ClawContentBlock() => Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: _ContentBubble(
+            block: block,
+            isError: isError,
+          ),
+        ),
+      ClawToolCallBlock() => Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: _ToolCallCard(record: block.record),
+        ),
+    };
+  }
+
+  Widget _loadingDots() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.06),
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(4),
+            topRight: Radius.circular(16),
+            bottomLeft: Radius.circular(16),
+            bottomRight: Radius.circular(16),
+          ),
+          border: Border.all(color: Colors.white.withOpacity(0.08)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(
+            3,
+            (_) => Container(
+              width: 6,
+              height: 6,
+              margin: const EdgeInsets.symmetric(horizontal: 2),
+              decoration: const BoxDecoration(
+                color: Colors.white38,
+                shape: BoxShape.circle,
+              ),
             ),
           ),
         ),
-      );
-    }
-    // reasoning 流式阶段 content 还是空 → 不占空间
-    if (msg.content.isEmpty && isStreaming) {
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Content bubble
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ContentBubble extends StatelessWidget {
+  const _ContentBubble({required this.block, required this.isError});
+
+  final ClawContentBlock block;
+  final bool isError;
+
+  @override
+  Widget build(BuildContext context) {
+    if (block.content.isEmpty && block.isStreaming) {
+      // reasoning 结束但 content 还没开始时，不占空间
       return const SizedBox.shrink();
     }
-    return Text(
-      isStreaming ? '${msg.content}▍' : msg.content,
-      style: TextStyle(
-        color: isError ? Colors.red[300] : Colors.white,
-        fontSize: 14,
-        height: 1.5,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: isError
+            ? Colors.red.withOpacity(0.12)
+            : Colors.white.withOpacity(0.06),
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(4),
+          topRight: Radius.circular(16),
+          bottomLeft: Radius.circular(16),
+          bottomRight: Radius.circular(16),
+        ),
+        border: Border.all(
+          color: isError
+              ? Colors.red.withOpacity(0.3)
+              : Colors.white.withOpacity(0.08),
+        ),
+      ),
+      child: Text(
+        block.isStreaming ? '${block.content}▍' : block.content,
+        style: TextStyle(
+          color: isError ? Colors.red[300] : Colors.white,
+          fontSize: 14,
+          height: 1.5,
+        ),
       ),
     );
   }
@@ -171,7 +175,6 @@ class _ReasoningBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 6),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.03),
         borderRadius: BorderRadius.circular(10),
@@ -187,8 +190,7 @@ class _ReasoningBlock extends StatelessWidget {
             onTap: onToggle,
             borderRadius: BorderRadius.circular(10),
             child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: Row(
                 children: [
                   const Icon(
@@ -262,7 +264,6 @@ class _ToolCallCard extends StatelessWidget {
         record.args['pattern'] as String?;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 4),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.04),

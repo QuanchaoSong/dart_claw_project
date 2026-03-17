@@ -1,3 +1,4 @@
+import 'chat_block.dart';
 import 'tool_call_record.dart';
 
 /// 消息角色
@@ -20,96 +21,142 @@ enum ClawChatMessageStatus {
 
 /// 聊天消息数据模型
 ///
-/// 同时兼容：
-/// - 普通对话消息（user / assistant）
-/// - 含工具调用的 assistant 消息（[toolCalls] 非空）
+/// assistant 消息由 [blocks] 有序列表组成，每轮 LLM 调用可追加新的
+/// reasoning / content / toolCall block，而不会覆盖旧内容。
 class ClawChatMessage {
   final String id;
   final ClawChatMessageRole role;
   final DateTime timestamp;
   final ClawChatMessageStatus status;
 
-  /// 消息正文（流式时逐步追加，assistant tool_call 消息可为空字符串）
-  final String content;
-
-  /// LLM 的推理过程（DeepSeek Reasoner 等模型的 reasoning_content，与正文分离存储）
-  /// 空字符串表示无推理过程
-  final String reasoningContent;
-
-  /// LLM 返回的工具调用列表（仅 role == assistant 时可能非空）
-  final List<ClawToolCallRecord> toolCalls;
+  /// 有序 block 列表，代表本条消息的完整输出历史
+  final List<ClawChatBlock> blocks;
 
   const ClawChatMessage({
     required this.id,
     required this.role,
     required this.timestamp,
     this.status = ClawChatMessageStatus.done,
-    this.content = '',
-    this.reasoningContent = '',
-    this.toolCalls = const [],
+    this.blocks = const [],
   });
+
+  // ─── Computed getters (用于 API 序列化 & 兼容旧调用) ──────────────────────
+
+  /// 所有 content block 的文本拼接（用于 toApiJson / 旧代码兼容）
+  String get content => blocks
+      .whereType<ClawContentBlock>()
+      .map((b) => b.content)
+      .join('');
+
+  /// 所有 reasoning block 的文本拼接（用于 toApiJson）
+  String get reasoningContent => blocks
+      .whereType<ClawReasoningBlock>()
+      .map((b) => b.content)
+      .join('');
+
+  /// 当前所有工具调用记录
+  List<ClawToolCallRecord> get toolCalls => blocks
+      .whereType<ClawToolCallBlock>()
+      .map((b) => b.record)
+      .toList();
+
+  // ─── Factory constructors ─────────────────────────────────────────────────
 
   /// 创建一条用户消息
   factory ClawChatMessage.user(String content) => ClawChatMessage(
-    id: _uuid(),
-    role: ClawChatMessageRole.user,
-    timestamp: DateTime.now(),
-    status: ClawChatMessageStatus.sending,
-    content: content,
-  );
+        id: _uuid(),
+        role: ClawChatMessageRole.user,
+        timestamp: DateTime.now(),
+        status: ClawChatMessageStatus.done,
+        blocks: [ClawContentBlock(content: content, isStreaming: false)],
+      );
 
   /// 创建一条空的 assistant 占位消息（流式输出开始时使用）
   factory ClawChatMessage.assistantStreaming() => ClawChatMessage(
-    id: _uuid(),
-    role: ClawChatMessageRole.assistant,
-    timestamp: DateTime.now(),
-    status: ClawChatMessageStatus.streaming,
-  );
+        id: _uuid(),
+        role: ClawChatMessageRole.assistant,
+        timestamp: DateTime.now(),
+        status: ClawChatMessageStatus.streaming,
+        blocks: const [],
+      );
+
+  // ─── Mutation helpers (均返回新实例，保持不可变) ──────────────────────────
 
   ClawChatMessage copyWith({
-    String? content,
-    String? reasoningContent,
     ClawChatMessageStatus? status,
-    List<ClawToolCallRecord>? toolCalls,
-  }) {
-    return ClawChatMessage(
-      id: id,
-      role: role,
-      timestamp: timestamp,
-      status: status ?? this.status,
-      content: content ?? this.content,
-      reasoningContent: reasoningContent ?? this.reasoningContent,
-      toolCalls: toolCalls ?? this.toolCalls,
-    );
-  }
+    List<ClawChatBlock>? blocks,
+  }) =>
+      ClawChatMessage(
+        id: id,
+        role: role,
+        timestamp: timestamp,
+        status: status ?? this.status,
+        blocks: blocks ?? this.blocks,
+      );
 
-  /// 追加流式文本片段，返回新实例
+  /// 向末尾追加一个新 block
+  ClawChatMessage addBlock(ClawChatBlock block) =>
+      copyWith(blocks: [...blocks, block]);
+
+  /// 向最后一个 [ClawContentBlock] 追加流式文本片段
   ClawChatMessage appendChunk(String chunk) {
-    return copyWith(content: content + chunk, status: ClawChatMessageStatus.streaming);
-  }
-
-  /// 追加推理过程片段，返回新实例
-  ClawChatMessage appendReasoningChunk(String chunk) {
+    final newBlocks = List<ClawChatBlock>.from(blocks);
+    final lastIdx = newBlocks.lastIndexWhere((b) => b is ClawContentBlock);
+    if (lastIdx == -1) return this;
+    newBlocks[lastIdx] =
+        (newBlocks[lastIdx] as ClawContentBlock).appendChunk(chunk);
     return copyWith(
-      reasoningContent: reasoningContent + chunk,
-      status: ClawChatMessageStatus.streaming,
-    );
+        blocks: newBlocks, status: ClawChatMessageStatus.streaming);
   }
 
-  /// 标记流式输出完成
-  ClawChatMessage finalize() => copyWith(status: ClawChatMessageStatus.done);
+  /// 向最后一个 [ClawReasoningBlock] 追加流式推理片段
+  ClawChatMessage appendReasoningChunk(String chunk) {
+    final newBlocks = List<ClawChatBlock>.from(blocks);
+    final lastIdx = newBlocks.lastIndexWhere((b) => b is ClawReasoningBlock);
+    if (lastIdx == -1) return this;
+    newBlocks[lastIdx] =
+        (newBlocks[lastIdx] as ClawReasoningBlock).appendChunk(chunk);
+    return copyWith(
+        blocks: newBlocks, status: ClawChatMessageStatus.streaming);
+  }
+
+  /// 新增或更新一个工具调用 block（通过 record.id 匹配）
+  ClawChatMessage updateToolBlock(ClawToolCallRecord record) {
+    final newBlocks = List<ClawChatBlock>.from(blocks);
+    final idx = newBlocks.indexWhere(
+        (b) => b is ClawToolCallBlock && b.record.id == record.id);
+    if (idx == -1) {
+      newBlocks.add(ClawToolCallBlock(record: record));
+    } else {
+      newBlocks[idx] = ClawToolCallBlock(record: record);
+    }
+    return copyWith(blocks: newBlocks);
+  }
+
+  /// 标记所有流式 block 结束，消息状态改为 done
+  ClawChatMessage finalize() {
+    final newBlocks = blocks.map((b) => switch (b) {
+          ClawReasoningBlock() => b.finalize(),
+          ClawContentBlock() => b.finalize(),
+          ClawToolCallBlock() => b,
+        }).toList();
+    return copyWith(blocks: newBlocks, status: ClawChatMessageStatus.done);
+  }
 
   /// 转为 LLM API 所需的 messages 格式（OpenAI 兼容）
   Map<String, dynamic> toApiJson() {
-    final base = <String, dynamic>{
-      'role': role.name,  // .name 输出 'user'/'assistant'/'system'，与 API 格式一致
-      'content': content.isEmpty ? null : content,
-    };
-    if (toolCalls.isNotEmpty) {
-      base['tool_calls'] = toolCalls.map((t) => t.toApiJson()).toList();
+    final contentStr = content;
+    final base = <String, dynamic>{'role': role.name};
+    if (contentStr.isNotEmpty) base['content'] = contentStr;
+
+    final reasoning = reasoningContent;
+    if (reasoning.isNotEmpty) base['reasoning_content'] = reasoning;
+
+    final tc = toolCalls;
+    if (tc.isNotEmpty) {
+      base['tool_calls'] = tc.map((t) => t.toApiJson()).toList();
     }
-    // content 为 null 时移除（纯工具调用消息）
-    if (base['content'] == null) base.remove('content');
+
     return base;
   }
 }
@@ -120,3 +167,4 @@ String _uuid() {
   final rand = now ^ (now >> 16);
   return rand.toRadixString(36);
 }
+
