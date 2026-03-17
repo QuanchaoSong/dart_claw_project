@@ -19,6 +19,13 @@ class ClawAgentMessageChunkEvent extends ClawAgentEvent {
   ClawAgentMessageChunkEvent(this.messageId, this.chunk);
 }
 
+/// LLM 思考过程片段（DeepSeek Reasoner 等模型的 reasoning_content）
+class ClawAgentReasoningChunkEvent extends ClawAgentEvent {
+  final String messageId;
+  final String chunk;
+  ClawAgentReasoningChunkEvent(this.messageId, this.chunk);
+}
+
 /// LLM 当前这轮输出完毕（流式结束），附带完整 tool_calls（如有）
 class ClawAgentMessageDoneEvent extends ClawAgentEvent {
   final String messageId;

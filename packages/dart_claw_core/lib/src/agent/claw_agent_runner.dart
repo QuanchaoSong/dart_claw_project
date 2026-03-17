@@ -62,13 +62,8 @@ IMPORTANT RULES:
     yield ClawAgentLogEvent('调用 ${client.modelId}…');
 
     try {
-      bool isFirstAssistantMsg = true;
-
       for (var round = 0; round < maxRounds; round++) {
-        final currentAssistantId =
-            isFirstAssistantMsg ? assistantId : _genId();
-        isFirstAssistantMsg = false;
-
+        // 所有轮次始终复用同一个 assistantId，保证 UI 只有一个气泡
         String fullContent = '';
         String reasoningContent = '';
         List<ClawToolCallRecord> pendingToolCalls = [];
@@ -80,11 +75,10 @@ IMPORTANT RULES:
           switch (delta) {
             case ClawLlmTextDelta(:final text):
               fullContent += text;
-              yield ClawAgentMessageChunkEvent(currentAssistantId, text);
+              yield ClawAgentMessageChunkEvent(assistantId, text);
             case ClawLlmReasoningDelta(:final text):
-              // 思考过程：显示给用户，同时单独保存用于回填 API
               reasoningContent += text;
-              yield ClawAgentMessageChunkEvent(currentAssistantId, text);
+              yield ClawAgentReasoningChunkEvent(assistantId, text);
             case ClawLlmToolCallsDelta(:final toolCalls):
               pendingToolCalls = toolCalls;
               for (final tc in toolCalls) {
@@ -96,7 +90,7 @@ IMPORTANT RULES:
         }
 
         yield ClawAgentMessageDoneEvent(
-          currentAssistantId,
+          assistantId,
           toolCalls: pendingToolCalls,
         );
 

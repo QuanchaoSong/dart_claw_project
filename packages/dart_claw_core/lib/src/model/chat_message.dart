@@ -32,6 +32,10 @@ class ClawChatMessage {
   /// 消息正文（流式时逐步追加，assistant tool_call 消息可为空字符串）
   final String content;
 
+  /// LLM 的推理过程（DeepSeek Reasoner 等模型的 reasoning_content，与正文分离存储）
+  /// 空字符串表示无推理过程
+  final String reasoningContent;
+
   /// LLM 返回的工具调用列表（仅 role == assistant 时可能非空）
   final List<ClawToolCallRecord> toolCalls;
 
@@ -41,6 +45,7 @@ class ClawChatMessage {
     required this.timestamp,
     this.status = ClawChatMessageStatus.done,
     this.content = '',
+    this.reasoningContent = '',
     this.toolCalls = const [],
   });
 
@@ -63,6 +68,7 @@ class ClawChatMessage {
 
   ClawChatMessage copyWith({
     String? content,
+    String? reasoningContent,
     ClawChatMessageStatus? status,
     List<ClawToolCallRecord>? toolCalls,
   }) {
@@ -72,6 +78,7 @@ class ClawChatMessage {
       timestamp: timestamp,
       status: status ?? this.status,
       content: content ?? this.content,
+      reasoningContent: reasoningContent ?? this.reasoningContent,
       toolCalls: toolCalls ?? this.toolCalls,
     );
   }
@@ -79,6 +86,14 @@ class ClawChatMessage {
   /// 追加流式文本片段，返回新实例
   ClawChatMessage appendChunk(String chunk) {
     return copyWith(content: content + chunk, status: ClawChatMessageStatus.streaming);
+  }
+
+  /// 追加推理过程片段，返回新实例
+  ClawChatMessage appendReasoningChunk(String chunk) {
+    return copyWith(
+      reasoningContent: reasoningContent + chunk,
+      status: ClawChatMessageStatus.streaming,
+    );
   }
 
   /// 标记流式输出完成

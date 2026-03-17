@@ -76,6 +76,10 @@ class HomeLogic extends GetxController {  // ─── 输入框 & 滚动控制�
         _appendChunk(messageId, chunk);
         _scrollToBottom();
 
+      case ClawAgentReasoningChunkEvent(:final messageId, :final chunk):
+        _appendReasoningChunk(messageId, chunk);
+        _scrollToBottom();
+
       case ClawAgentMessageDoneEvent(:final messageId, :final toolCalls):
         _finalizeMessage(messageId, toolCalls: toolCalls);
 
@@ -107,6 +111,12 @@ class HomeLogic extends GetxController {  // ─── 输入框 & 滚动控制�
     final idx = messages.indexWhere((m) => m.id == messageId);
     if (idx == -1) return;
     messages[idx] = messages[idx].appendChunk(chunk);
+  }
+
+  void _appendReasoningChunk(String messageId, String chunk) {
+    final idx = messages.indexWhere((m) => m.id == messageId);
+    if (idx == -1) return;
+    messages[idx] = messages[idx].appendReasoningChunk(chunk);
   }
 
   void _finalizeMessage(
