@@ -1,5 +1,5 @@
 import 'package:dart_claw/others/constants/color_constants.dart';
-import 'package:dart_claw/others/tool/database_tool.dart';
+import 'package:dart_claw/others/model/claw_session_info.dart';
 import 'package:dart_claw/pages/home/home_logic.dart';
 import 'package:dart_claw/pages/settings/settings_page.dart';
 import 'package:flutter/material.dart';
@@ -110,7 +110,7 @@ class SessionSidebarView extends StatelessWidget {
 
   // ─── 弹窗 ────────────────────────────────────────────────────────────────
 
-  void _showRenameDialog(HomeLogic logic, ClawSession session) {
+  void _showRenameDialog(HomeLogic logic, ClawSessionInfo session) {
     final ctrl = TextEditingController(text: session.title);
     Get.dialog(
       AlertDialog(
@@ -159,13 +159,13 @@ class SessionSidebarView extends StatelessWidget {
     );
   }
 
-  void _doRename(HomeLogic logic, ClawSession session, TextEditingController ctrl) {
+  void _doRename(HomeLogic logic, ClawSessionInfo session, TextEditingController ctrl) {
     final t = ctrl.text.trim();
     if (t.isNotEmpty) logic.renameSession(session.id, t);
     Get.back();
   }
 
-  void _showDeleteConfirm(HomeLogic logic, ClawSession session) {
+  void _showDeleteConfirm(HomeLogic logic, ClawSessionInfo session) {
     Get.dialog(
       AlertDialog(
         backgroundColor: AppColors.dialogBg,
@@ -212,7 +212,7 @@ class _SessionItem extends StatelessWidget {
     required this.onDelete,
   });
 
-  final ClawSession session;
+  final ClawSessionInfo session;
   final bool isActive;
   final VoidCallback onTap;
   final VoidCallback onRename;

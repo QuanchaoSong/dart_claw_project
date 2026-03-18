@@ -2,47 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:dart_claw/others/model/claw_session_info.dart';
 import 'package:dart_claw_core/dart_claw_core.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-
-// ─── Session 数据模型 ──────────────────────────────────────────────────────────
-
-class ClawSession {
-  final String id;
-  final String title;
-  final DateTime createdAt;
-  final DateTime updatedAt;
-
-  const ClawSession({
-    required this.id,
-    required this.title,
-    required this.createdAt,
-    required this.updatedAt,
-  });
-
-  ClawSession copyWith({String? title, DateTime? updatedAt}) => ClawSession(
-        id: id,
-        title: title ?? this.title,
-        createdAt: createdAt,
-        updatedAt: updatedAt ?? this.updatedAt,
-      );
-
-  factory ClawSession.fromMap(Map<String, dynamic> m) => ClawSession(
-        id: m['id'] as String,
-        title: m['title'] as String,
-        createdAt: DateTime.fromMillisecondsSinceEpoch(m['created_at'] as int),
-        updatedAt: DateTime.fromMillisecondsSinceEpoch(m['updated_at'] as int),
-      );
-
-  Map<String, dynamic> toMap() => {
-        'id': id,
-        'title': title,
-        'created_at': createdAt.millisecondsSinceEpoch,
-        'updated_at': updatedAt.millisecondsSinceEpoch,
-      };
-}
 
 // ─── DatabaseTool ─────────────────────────────────────────────────────────────
 
@@ -117,7 +81,7 @@ class DatabaseTool {
   // ─── Session CRUD ─────────────────────────────────────────────────────────
 
   /// 插入新 session
-  Future<void> insertSession(ClawSession session) async {
+  Future<void> insertSession(ClawSessionInfo session) async {
     await _database.insert(
       'sessions',
       session.toMap(),
@@ -126,12 +90,12 @@ class DatabaseTool {
   }
 
   /// 所有 session，按最近更新排序
-  Future<List<ClawSession>> listSessions() async {
+  Future<List<ClawSessionInfo>> listSessions() async {
     final rows = await _database.query(
       'sessions',
       orderBy: 'updated_at DESC',
     );
-    return rows.map(ClawSession.fromMap).toList();
+    return rows.map(ClawSessionInfo.fromMap).toList();
   }
 
   /// 更新 session 标题 & updated_at

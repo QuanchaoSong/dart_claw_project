@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:dart_claw/others/constants/color_constants.dart';
 import 'package:dart_claw/others/services/app_config_service.dart';
+import 'package:dart_claw/others/model/claw_session_info.dart';
 import 'package:dart_claw/others/tool/database_tool.dart';
 import 'package:dart_claw_core/dart_claw_core.dart';
 import 'package:get/get.dart';
@@ -66,7 +67,7 @@ class HomeLogic extends GetxController {
   // ─── Session 状态 ────────────────────────────────────────────────────────
 
   /// 所有历史 session（供侧边栏使用）
-  final sessions = <ClawSession>[].obs;
+  final sessions = <ClawSessionInfo>[].obs;
 
   /// 当前活跃 session id（null = 尚未创建），Rxn 供 UI 层 Obx 监听
   final currentSessionId = Rxn<String>();
@@ -358,7 +359,7 @@ class HomeLogic extends GetxController {
     final title = firstUserMessage.length > 50
         ? '${firstUserMessage.substring(0, 50)}…'
         : firstUserMessage;
-    final session = ClawSession(
+    final session = ClawSessionInfo(
       id: _newId(),
       title: title,
       createdAt: DateTime.now(),
