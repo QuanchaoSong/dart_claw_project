@@ -5,6 +5,7 @@ import 'package:dart_claw/others/constants/color_constants.dart';
 import 'package:dart_claw/others/services/app_config_service.dart';
 import 'package:dart_claw/others/model/claw_session_info.dart';
 import 'package:dart_claw/others/tool/database_tool.dart';
+import 'package:dart_claw/others/tool/show_image_tool.dart';
 import 'package:dart_claw_core/dart_claw_core.dart';
 import 'package:get/get.dart';
 
@@ -304,7 +305,17 @@ class HomeLogic extends GetxController {
       temperature: cfg.model.temperature,
       maxTokens: cfg.model.maxTokens,
     );
-    final runner = ClawAgentRunner(client: client);
+    final runner = ClawAgentRunner(
+      client: client,
+      tools: [
+        RunCommandTool(),
+        ReadFileTool(),
+        WriteFileTool(),
+        ListDirTool(),
+        SearchInFileTool(),
+        ShowImageTool(),
+      ],
+    );
     _activeRunner = runner;
 
     await for (final event in runner.run(
