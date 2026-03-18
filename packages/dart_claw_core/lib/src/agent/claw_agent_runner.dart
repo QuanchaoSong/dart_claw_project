@@ -70,7 +70,7 @@ IMPORTANT RULES:
     required String userMessage,
     List<ClawChatMessage> history = const [],
     String? assistantMessageId,
-    int maxRounds = 10,
+    int maxRounds = 20,
   }) async* {
     _cancelled = false;   // 每次 run 重置取消标志
     final assistantId = assistantMessageId ?? _genId();

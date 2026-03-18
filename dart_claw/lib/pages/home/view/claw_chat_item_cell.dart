@@ -1,6 +1,8 @@
 import 'package:dart_claw/others/constants/color_constants.dart';
 import 'package:dart_claw/pages/home/home_logic.dart';
+import 'package:dart_claw/pages/home/view/loading_dots.dart';
 import 'package:dart_claw_core/dart_claw_core.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:gpt_markdown/gpt_markdown.dart';
@@ -42,7 +44,7 @@ class _ClawChatItemCellState extends State<ClawChatItemCell> {
         children: [
           // 显示所有 blocks（顺序渲染）
           if (msg.blocks.isEmpty && isStreaming)
-            _loadingDots()
+            const LoadingDots()
           else
             for (var i = 0; i < msg.blocks.length; i++)
               _buildBlock(msg.blocks[i], i, isError, isStreaming),
@@ -76,40 +78,6 @@ class _ClawChatItemCellState extends State<ClawChatItemCell> {
           child: _ToolCallCard(record: block.record),
         ),
     };
-  }
-
-  Widget _loadingDots() {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.06),
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(4),
-            topRight: Radius.circular(16),
-            bottomLeft: Radius.circular(16),
-            bottomRight: Radius.circular(16),
-          ),
-          border: Border.all(color: Colors.white.withOpacity(0.08)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: List.generate(
-            3,
-            (_) => Container(
-              width: 6,
-              height: 6,
-              margin: const EdgeInsets.symmetric(horizontal: 2),
-              decoration: const BoxDecoration(
-                color: Colors.white38,
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }
 
@@ -293,7 +261,9 @@ class _ToolCallCard extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(statusIcon, size: 14, color: statusColor.withOpacity(0.9)),
+          record.status == ClawToolStatus.running
+              ? const CupertinoActivityIndicator(radius: 7)
+              : Icon(statusIcon, size: 14, color: statusColor.withOpacity(0.9)),
           const SizedBox(width: 8),
           Flexible(
             child: Column(

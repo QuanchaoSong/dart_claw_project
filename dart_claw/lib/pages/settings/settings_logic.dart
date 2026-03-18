@@ -13,6 +13,9 @@ class SettingsLogic extends GetxController {
   // ─── 表单控制器 ───────────────────────────────────────────────────────────
   late final TextEditingController apiKeyController;
   late final TextEditingController customBaseUrlController;
+  late final TextEditingController maxHistoryCountController;
+  late final TextEditingController maxRoundsController;
+  late final TextEditingController maxTokensController;
 
   // ─── 临时编辑状态（不直接写入 ConfigService，保存时才写入）─────────────
   late final Rx<AIProvider> selectedProvider;
@@ -20,29 +23,51 @@ class SettingsLogic extends GetxController {
   late final RxDouble temperature;
   late final RxInt maxTokens;
   late final RxBool autoSave;
-  late final RxInt maxHistoryCount;
 
   @override
   void onInit() {
     super.onInit();
     final cfg = AppConfigService.shared.config.value;
+    final active = cfg.model; // 当前激活 provider 的配置
 
-    selectedProvider = cfg.model.provider.obs;
-    selectedModelId = cfg.model.modelId.obs;
-    temperature = cfg.model.temperature.obs;
-    maxTokens = cfg.model.maxTokens.obs;
+    selectedProvider = active.provider.obs;
+    selectedModelId = active.modelId.obs;
+    temperature = active.temperature.obs;
+    maxTokens = active.maxTokens.obs;
     autoSave = cfg.session.autoSave.obs;
-    maxHistoryCount = cfg.session.maxHistoryCount.obs;
 
-    apiKeyController = TextEditingController(text: cfg.model.apiKey);
+    maxHistoryCountController = TextEditingController(
+        text: cfg.session.maxHistoryCount.toString());
+    maxRoundsController = TextEditingController(
+        text: cfg.session.maxRounds.toString());
+    maxTokensController = TextEditingController(
+        text: active.maxTokens.toString());
+
+    apiKeyController = TextEditingController(text: active.apiKey);
     customBaseUrlController = TextEditingController(
-      text: cfg.model.customBaseUrl ?? '',
+      text: active.customBaseUrl ?? '',
     );
 
-    // 切换 provider 时，自动选第一个可用模型
+    // 切换 provider 时：优先 restore 已保存的配置，否则使用默认值
     ever(selectedProvider, (provider) {
-      final models = kProviderModels[provider] ?? [];
-      if (models.isNotEmpty) selectedModelId.value = models.first;
+      final saved =
+          AppConfigService.shared.config.value.providerConfigs[provider];
+      if (saved != null) {
+        selectedModelId.value = saved.modelId;
+        apiKeyController.text = saved.apiKey;
+        temperature.value = saved.temperature;
+        maxTokens.value = saved.maxTokens;
+        maxTokensController.text = saved.maxTokens.toString();
+        customBaseUrlController.text = saved.customBaseUrl ?? '';
+      } else {
+        final models = kProviderModels[provider] ?? [];
+        selectedModelId.value = models.isNotEmpty ? models.first : '';
+        apiKeyController.text = '';
+        temperature.value = 0.7;
+        maxTokens.value = 4096;
+        maxTokensController.text = '4096';
+        customBaseUrlController.text = '';
+      }
     });
   }
 
@@ -50,6 +75,9 @@ class SettingsLogic extends GetxController {
   void onClose() {
     apiKeyController.dispose();
     customBaseUrlController.dispose();
+    maxHistoryCountController.dispose();
+    maxRoundsController.dispose();
+    maxTokensController.dispose();
     super.onClose();
   }
 
@@ -65,14 +93,16 @@ class SettingsLogic extends GetxController {
       modelId: selectedModelId.value,
       apiKey: apiKeyController.text.trim(),
       temperature: temperature.value,
-      maxTokens: maxTokens.value,
+      maxTokens: int.tryParse(maxTokensController.text.trim()) ?? 4096,
       customBaseUrl: selectedProvider.value == AIProvider.custom
           ? customBaseUrlController.text.trim()
           : null,
     );
     final sessionInfo = SessionSettingsInfo(
       autoSave: autoSave.value,
-      maxHistoryCount: maxHistoryCount.value,
+      maxHistoryCount:
+          int.tryParse(maxHistoryCountController.text.trim()) ?? 50,
+      maxRounds: int.tryParse(maxRoundsController.text.trim()) ?? 20,
     );
     await AppConfigService.shared.saveModelSettings(modelInfo);
     await AppConfigService.shared.saveSessionSettings(sessionInfo);

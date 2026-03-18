@@ -83,8 +83,15 @@ class AppConfigService extends GetxService {
 
   // ─── 公开保存方法 ──────────────────────────────────────────────────────
 
+  /// 保存某个 provider 的模型配置，并将其设为 activeProvider
   Future<void> saveModelSettings(AIModelSettingsInfo model) async {
-    config.value = config.value.copyWith(model: model);
+    final updated = Map<AIProvider, AIModelSettingsInfo>.from(
+        config.value.providerConfigs);
+    updated[model.provider] = model;
+    config.value = config.value.copyWith(
+      activeProvider: model.provider,
+      providerConfigs: updated,
+    );
     await _writeSettings(config.value);
   }
 

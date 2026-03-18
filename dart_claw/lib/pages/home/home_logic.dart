@@ -310,6 +310,7 @@ class HomeLogic extends GetxController {
       userMessage: userMessage,
       history: history,
       assistantMessageId: assistantMsgId,
+      maxRounds: cfg.session.maxRounds,
     )) {
       handleEvent(event);
     }
