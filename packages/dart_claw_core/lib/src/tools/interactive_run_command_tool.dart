@@ -3,7 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:dart_claw_core/dart_claw_core.dart';
+
+import 'claw_tool.dart';
 
 /// A drop-in replacement for [RunCommandTool] that handles interactive
 /// password prompts (sudo, ssh passphrase, etc.) by delegating credential
@@ -14,14 +15,14 @@ import 'package:dart_claw_core/dart_claw_core.dart';
 class InteractiveRunCommandTool implements ClawTool {
   const InteractiveRunCommandTool({required this.onPasswordRequired});
 
-  /// Called when a password/passphrase prompt is detected in stderr.
+  /// Called when a password/passphrase prompt is detected in the process output.
   ///
-  /// [prompt] is the raw prompt text from the process (e.g. "[sudo] password
-  /// for chint: " or "Sorry, try again.\n[sudo] password for chint: ").
+  /// [prompt] is the raw prompt text (e.g. "[sudo] password for chint:",
+  /// or "Sorry, try again.\n[sudo] password for chint:" on a retry).
   /// Return the password string, or null to cancel the operation.
   final Future<String?> Function(String prompt) onPasswordRequired;
 
-  // Matches partial lines that look like password/passphrase prompts:
+  // Matches trailing partial lines that look like password/passphrase prompts:
   //   "[sudo] password for chint:"
   //   "Password:"
   //   "Enter passphrase for key '...':"
@@ -120,17 +121,17 @@ class InteractiveRunCommandTool implements ClawTool {
     // are detected regardless of whether the caller used `2>&1`.
     // (With `2>&1`, sudo's prompt lands in stdout, not stderr.)
     final merged = StreamController<(bool isStderr, String chunk)>();
-    int _doneCount = 0;
-    void _onStreamDone() {
-      if (++_doneCount == 2) merged.close();
+    var doneCount = 0;
+    void onStreamDone() {
+      if (++doneCount == 2) merged.close();
     }
 
     process.stdout
         .transform(const Utf8Decoder(allowMalformed: true))
         .listen(
           (chunk) => merged.add((false, chunk)),
-          onDone: _onStreamDone,
-          onError: (_) => _onStreamDone(),
+          onDone: onStreamDone,
+          onError: (_) => onStreamDone(),
           cancelOnError: false,
         );
 
@@ -138,8 +139,8 @@ class InteractiveRunCommandTool implements ClawTool {
         .transform(const Utf8Decoder(allowMalformed: true))
         .listen(
           (chunk) => merged.add((true, chunk)),
-          onDone: _onStreamDone,
-          onError: (_) => _onStreamDone(),
+          onDone: onStreamDone,
+          onError: (_) => onStreamDone(),
           cancelOnError: false,
         );
 

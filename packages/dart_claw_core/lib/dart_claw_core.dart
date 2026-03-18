@@ -10,3 +10,5 @@ export 'src/llm/claw_llm_client.dart';
 export 'src/agent/claw_agent_runner.dart';
 export 'src/tools/claw_tool.dart';
 export 'src/tools/builtin_tools.dart';
+export 'src/tools/show_image_tool.dart';
+export 'src/tools/interactive_run_command_tool.dart';

@@ -89,6 +89,26 @@ class SessionInfoAndSettingsView extends StatelessWidget {
                     onChanged: logic.setAllowAllTools,
                   ),
                 ),
+                const SizedBox(height: 12),
+                Obx(
+                  () => _ToggleRow(
+                    label: 'Auto-fill sudo password',
+                    subtitle: 'Skip password dialog for sudo commands',
+                    value: logic.autoFillSudoPassword.value,
+                    onChanged: (v) => logic.autoFillSudoPassword.value = v,
+                  ),
+                ),
+                Obx(() {
+                  if (!logic.autoFillSudoPassword.value) {
+                    return const SizedBox.shrink();
+                  }
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: _InlinePasswordField(
+                      controller: logic.sudoPasswordController,
+                    ),
+                  );
+                }),
               ],
             ),
           ),
@@ -176,6 +196,58 @@ class _ToggleRow extends StatelessWidget {
           inactiveTrackColor: Colors.white12,
         ),
       ],
+    );
+  }
+}
+
+// ─── 内联密码输入框（带显示/隐藏切换）─────────────────────────────────────────
+
+class _InlinePasswordField extends StatefulWidget {
+  const _InlinePasswordField({required this.controller});
+
+  final TextEditingController controller;
+
+  @override
+  State<_InlinePasswordField> createState() => _InlinePasswordFieldState();
+}
+
+class _InlinePasswordFieldState extends State<_InlinePasswordField> {
+  bool _obscure = true;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: widget.controller,
+      obscureText: _obscure,
+      style: const TextStyle(color: Colors.white, fontSize: 12),
+      decoration: InputDecoration(
+        hintText: 'sudo password',
+        hintStyle: const TextStyle(color: Colors.white24, fontSize: 12),
+        filled: true,
+        fillColor: Colors.white.withOpacity(0.04),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(7),
+          borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(7),
+          borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(7),
+          borderSide: BorderSide(color: Colors.amber.withOpacity(0.45)),
+        ),
+        suffixIcon: IconButton(
+          icon: Icon(
+            _obscure ? Icons.visibility_off : Icons.visibility,
+            color: Colors.white24,
+            size: 16,
+          ),
+          onPressed: () => setState(() => _obscure = !_obscure),
+        ),
+      ),
     );
   }
 }
