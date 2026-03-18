@@ -1,19 +1,41 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:dart_claw/others/constants/color_constants.dart';
 import 'package:dart_claw/others/services/app_config_service.dart';
+import 'package:dart_claw/others/tool/database_tool.dart';
 import 'package:dart_claw_core/dart_claw_core.dart';
 import 'package:get/get.dart';
 
-class HomeLogic extends GetxController {  // ─── 输入框 & 滚动控制器 ───────────────────────────────────────────────
+class HomeLogic extends GetxController {
+  // ─── 输入框 & 滚动控制器 ───────────────────────────────────────────────
 
   final inputController = TextEditingController();
   final scrollController = ScrollController();
+
+  late final inputFocusNode = FocusNode(
+    onKeyEvent: (node, event) {
+      if (event is KeyDownEvent &&
+          event.logicalKey == LogicalKeyboardKey.enter &&
+          HardwareKeyboard.instance.isShiftPressed) {
+        submitInput();
+        return KeyEventResult.handled;
+      }
+      return KeyEventResult.ignored;
+    },
+  );
+
+  @override
+  void onInit() {
+    super.onInit();
+    _initDb();
+  }
 
   @override
   void onClose() {
     inputController.dispose();
     scrollController.dispose();
+    inputFocusNode.dispose();
     super.onClose();
   }
 
@@ -39,6 +61,27 @@ class HomeLogic extends GetxController {  // ─── 输入框 & 滚动控制�
 
   void setAllowAllTools(bool value) {
     allowAllTools.value = value;
+  }
+
+  // ─── Session 状态 ────────────────────────────────────────────────────────
+
+  /// 所有历史 session（供侧边栏使用）
+  final sessions = <ClawSession>[].obs;
+
+  /// 当前活跃 session id（null = 尚未创建），Rxn 供 UI 层 Obx 监听
+  final currentSessionId = Rxn<String>();
+
+  /// 当前 session 标题（供顶栏显示）
+  String get currentSessionTitle {
+    final id = currentSessionId.value;
+    if (id == null) return 'New Session';
+    final matches = sessions.where((s) => s.id == id);
+    return matches.isEmpty ? 'Session' : matches.first.title;
+  }
+
+  String _newId() {
+    final t = DateTime.now().microsecondsSinceEpoch;
+    return (t ^ (t >> 16)).toRadixString(36);
   }
 
   // ─── 消息列表 ─────────────────────────────────────────────────────────────
@@ -74,7 +117,7 @@ class HomeLogic extends GetxController {  // ─── 输入框 & 滚动控制�
     isRunning.value = true;
     _scrollToBottom();
 
-    _runAgent(content.trim(), assistantMsg.id, history);
+    _runAgent(content.trim(), assistantMsg.id, history, userMsg);
   }
 
   // ─── 事件处理 ─────────────────────────────────────────────────────────────
@@ -246,7 +289,12 @@ class HomeLogic extends GetxController {  // ─── 输入框 & 滚动控制�
     String userMessage,
     String assistantMsgId,
     List<ClawChatMessage> history,
+    ClawChatMessage userMsg,
   ) async {
+    // ── 确保 session 存在，再持久化用户消息 ──
+    await _ensureSession(firstUserMessage: userMessage);
+    await _persistMessage(userMsg, messages.indexOf(userMsg));
+
     final cfg = AppConfigService.shared.config.value;
     final client = ClawLlmClient(
       baseUrl: cfg.model.effectiveBaseUrl,
@@ -274,8 +322,101 @@ class HomeLogic extends GetxController {  // ─── 输入框 & 滚动控制�
       isRunning.value = false;
       streamingMessageId = null;
     }
+
+    // ── 持久化 assistant 消息（最终状态）──
+    final assistantIdx = messages.indexWhere((m) => m.id == assistantMsgId);
+    if (assistantIdx != -1) {
+      await _persistMessage(messages[assistantIdx], assistantIdx);
+    }
+
     _activeRunner = null;
   }
 
+  // ─── DB 初始化 & Session 管理 ───────────────────────────────────────────────
+
+  Future<void> _initDb() async {
+    await DatabaseTool.shared.init();
+    final loaded = await DatabaseTool.shared.listSessions();
+    sessions.assignAll(loaded);
+    // 自动加载最近一次 session
+    if (loaded.isNotEmpty) {
+      await _loadSession(loaded.first.id);
+    }
+  }
+
+  Future<void> _loadSession(String sessionId) async {
+    currentSessionId.value = sessionId;
+    final msgs = await DatabaseTool.shared.loadMessages(sessionId);
+    messages.assignAll(msgs);
+    _scrollToBottom();
+  }
+
+  /// 若当前不存在 session，自动创建一个（懒创建）
+  Future<void> _ensureSession({required String firstUserMessage}) async {
+    if (currentSessionId.value != null) return;
+    final title = firstUserMessage.length > 50
+        ? '${firstUserMessage.substring(0, 50)}…'
+        : firstUserMessage;
+    final session = ClawSession(
+      id: _newId(),
+      title: title,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+    await DatabaseTool.shared.insertSession(session);
+    sessions.insert(0, session);
+    currentSessionId.value = session.id;
+  }
+
+  Future<void> _persistMessage(ClawChatMessage msg, int sortIndex) async {
+    if (currentSessionId.value == null) return;
+    await DatabaseTool.shared.upsertMessage(currentSessionId.value!, msg, sortIndex);
+    await DatabaseTool.shared.touchSession(currentSessionId.value!);
+    // 同步更新 sessions 列表中的 updatedAt
+    final idx = sessions.indexWhere((s) => s.id == currentSessionId.value);
+    if (idx != -1) {
+      sessions[idx] = sessions[idx].copyWith(updatedAt: DateTime.now());
+    }
+  }
+
+  // ─── 公开 Session 操作（供侧边栏 UI 调用）─────────────────────────────────
+
+  /// 新建空白 session（不写 DB，等第一条消息才创建）
+  void newSession() {
+    currentSessionId.value = null;
+    messages.clear();
+    allowAllTools.value = false;
+  }
+
+  /// 切换到已有 session
+  Future<void> switchToSession(String sessionId) async {
+    if (currentSessionId.value == sessionId) return;
+    if (isRunning.value) return; // 运行中禁止切换
+    await _loadSession(sessionId);
+    allowAllTools.value = false;
+  }
+
+  /// 重命名 session
+  Future<void> renameSession(String sessionId, String newTitle) async {
+    await DatabaseTool.shared.updateSessionTitle(sessionId, newTitle);
+    final idx = sessions.indexWhere((s) => s.id == sessionId);
+    if (idx != -1) {
+      sessions[idx] = sessions[idx].copyWith(title: newTitle);
+    }
+  }
+
+  /// 删除 session
+  Future<void> deleteSessionById(String sessionId) async {
+    await DatabaseTool.shared.deleteSession(sessionId);
+    sessions.removeWhere((s) => s.id == sessionId);
+    // 若删除的是当前 session，切到最新一个或新建空白
+    if (currentSessionId.value == sessionId) {
+      if (sessions.isNotEmpty) {
+        await _loadSession(sessions.first.id);
+      } else {
+        newSession();
+      }
+    }
+  }
 }
 

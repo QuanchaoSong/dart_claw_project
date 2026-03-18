@@ -87,5 +87,30 @@ class ClawToolCallRecord {
       'content': result ?? '',
     };
   }
+
+  // ─── 持久化序列化 ──────────────────────────────────────────────────────────
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'args': args,
+        'result': result,
+        'status': status.name,
+        'isDangerous': isDangerous,
+        // confirmRequestId 是运行时临时状态，不持久化
+      };
+
+  factory ClawToolCallRecord.fromJson(Map<String, dynamic> json) =>
+      ClawToolCallRecord(
+        id: json['id'] as String,
+        name: json['name'] as String,
+        args: Map<String, dynamic>.from(json['args'] as Map),
+        result: json['result'] as String?,
+        status: ClawToolStatus.values.firstWhere(
+          (s) => s.name == json['status'],
+          orElse: () => ClawToolStatus.pending,
+        ),
+        isDangerous: json['isDangerous'] as bool? ?? false,
+      );
 }
 

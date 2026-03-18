@@ -4,6 +4,29 @@ import 'tool_call_record.dart';
 /// 多轮工具调用时，新的 reasoning/content block 会追加到列表末尾，而不是覆盖旧的。
 sealed class ClawChatBlock {
   const ClawChatBlock();
+
+  // ─── 持久化序列化 ──────────────────────────────────────────────────────────
+
+  Map<String, dynamic> toJson();
+
+  factory ClawChatBlock.fromJson(Map<String, dynamic> json) {
+    final type = json['type'] as String;
+    return switch (type) {
+      'reasoning' => ClawReasoningBlock(
+          content: json['content'] as String? ?? '',
+          isStreaming: false,
+        ),
+      'content' => ClawContentBlock(
+          content: json['content'] as String? ?? '',
+          isStreaming: false,
+        ),
+      'tool_call' => ClawToolCallBlock(
+          record: ClawToolCallRecord.fromJson(
+              json['record'] as Map<String, dynamic>),
+        ),
+      _ => throw FormatException('Unknown ClawChatBlock type: $type'),
+    };
+  }
 }
 
 // ─── Reasoning block ──────────────────────────────────────────────────────────
@@ -27,6 +50,12 @@ class ClawReasoningBlock extends ClawChatBlock {
       copyWith(content: content + chunk);
 
   ClawReasoningBlock finalize() => copyWith(isStreaming: false);
+
+  @override
+  Map<String, dynamic> toJson() => {
+        'type': 'reasoning',
+        'content': content,
+      };
 }
 
 // ─── Content block ────────────────────────────────────────────────────────────
@@ -50,6 +79,12 @@ class ClawContentBlock extends ClawChatBlock {
       copyWith(content: content + chunk);
 
   ClawContentBlock finalize() => copyWith(isStreaming: false);
+
+  @override
+  Map<String, dynamic> toJson() => {
+        'type': 'content',
+        'content': content,
+      };
 }
 
 // ─── Tool call block ──────────────────────────────────────────────────────────
@@ -62,6 +97,12 @@ class ClawToolCallBlock extends ClawChatBlock {
 
   ClawToolCallBlock copyWith({ClawToolCallRecord? record}) =>
       ClawToolCallBlock(record: record ?? this.record);
+
+  @override
+  Map<String, dynamic> toJson() => {
+        'type': 'tool_call',
+        'record': record.toJson(),
+      };
 }
 
 // ─── Block type enum（用于 NewBlockEvent）────────────────────────────────────

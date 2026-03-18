@@ -40,6 +40,8 @@ dependencies:
   dart_claw_core:
       path: ../packages/dart_claw_core
   gpt_markdown: ^1.1.5
+  sqflite_common_ffi: ^2.4.0+2
+  path_provider: ^2.1.5
 
 dev_dependencies:
   flutter_test:

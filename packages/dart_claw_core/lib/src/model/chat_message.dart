@@ -233,6 +233,34 @@ class ClawChatMessage {
 
     return result;
   }
+
+  // ─── 持久化序列化 ──────────────────────────────────────────────────────────
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'role': role.name,
+        'timestamp': timestamp.millisecondsSinceEpoch,
+        'status': status.name,
+        'blocks': blocks.map((b) => b.toJson()).toList(),
+      };
+
+  factory ClawChatMessage.fromJson(Map<String, dynamic> json) =>
+      ClawChatMessage(
+        id: json['id'] as String,
+        role: ClawChatMessageRole.values.firstWhere(
+          (r) => r.name == json['role'],
+          orElse: () => ClawChatMessageRole.user,
+        ),
+        timestamp: DateTime.fromMillisecondsSinceEpoch(
+            json['timestamp'] as int),
+        status: ClawChatMessageStatus.values.firstWhere(
+          (s) => s.name == json['status'],
+          orElse: () => ClawChatMessageStatus.done,
+        ),
+        blocks: (json['blocks'] as List<dynamic>)
+            .map((b) => ClawChatBlock.fromJson(b as Map<String, dynamic>))
+            .toList(),
+      );
 }
 
 /// 简易 ID 生成（无外部依赖）

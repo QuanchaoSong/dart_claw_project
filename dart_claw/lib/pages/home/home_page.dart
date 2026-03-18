@@ -2,8 +2,8 @@ import 'package:dart_claw/others/constants/color_constants.dart';
 import 'package:dart_claw/pages/home/home_logic.dart';
 import 'package:dart_claw/pages/home/view/claw_chat_item_cell.dart';
 import 'package:dart_claw/pages/home/view/session_info_and_settings_view.dart';
+import 'package:dart_claw/pages/home/view/session_sidebar_view.dart';
 import 'package:dart_claw/pages/home/view/user_chat_item_cell.dart';
-import 'package:dart_claw/pages/settings/settings_page.dart';
 import 'package:dart_claw_core/dart_claw_core.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -27,7 +27,7 @@ class HomePage extends StatelessWidget {
         child: Row(
           children: [
             // 左侧边栏
-            _buildSidebar(context),
+            const SessionSidebarView(),
 
             // 中间聊天区
             Expanded(child: _buildChatArea()),
@@ -39,100 +39,6 @@ class HomePage extends StatelessWidget {
                   : const SizedBox.shrink(),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSidebar(BuildContext context) {
-    return Container(
-      width: 260,
-      margin: EdgeInsets.all(16),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          width: double.infinity,
-          height: double.infinity,
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withOpacity(0.08)),
-          ),
-          child: Column(
-            children: [
-              // 顶部标题区域
-              Padding(
-                padding: EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '🦞 dart Claw',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      'AI Assistant',
-                      style: TextStyle(fontSize: 12, color: Colors.white54),
-                    ),
-                  ],
-                ),
-              ),
-
-              Divider(color: Colors.white12),
-
-              // 会话列表区域（占位）
-              Expanded(
-                child: ListView.builder(
-                  padding: EdgeInsets.all(8),
-                  itemCount: 5,
-                  itemBuilder: (context, index) {
-                    return Container(
-                      margin: EdgeInsets.symmetric(vertical: 4),
-                      padding: EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: index == 0
-                            ? Colors.white.withOpacity(0.1)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        'Session ${index + 1}',
-                        style: TextStyle(color: Colors.white70),
-                      ),
-                    );
-                  },
-                ),
-              ),
-
-              Divider(color: Colors.white12),
-
-              // 底部按钮区域
-              Padding(
-                padding: EdgeInsets.all(12),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _buildActionButton(
-                        icon: Icons.add,
-                        label: 'New',
-                        onTap: () {},
-                      ),
-                    ),
-                    SizedBox(width: 8),
-                    _buildIconButton(
-                      icon: Icons.settings,
-                      onTap: () => openSettings(context),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );
@@ -158,14 +64,14 @@ class HomePage extends StatelessWidget {
                 padding: EdgeInsets.all(16),
                 child: Row(
                   children: [
-                    Text(
-                      'Current Session',
-                      style: TextStyle(
+                    Obx(() => Text(
+                      logic.currentSessionTitle,
+                      style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w500,
                         color: Colors.white,
                       ),
-                    ),
+                    )),
                     Spacer(),
                     Obx(() {
                       final hasAllowAll = logic.allowAllTools.value;
@@ -250,6 +156,7 @@ class HomePage extends StatelessWidget {
                           ),
                           child: TextField(
                             controller: logic.inputController,
+                            focusNode: logic.inputFocusNode,
                             style: const TextStyle(color: Colors.white),                            
                             decoration: InputDecoration(
                               hintText: running
@@ -295,52 +202,6 @@ class HomePage extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildActionButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 18, color: Colors.white70),
-            SizedBox(width: 6),
-            Text(label, style: TextStyle(color: Colors.white70, fontSize: 13)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildIconButton({
-    required IconData icon,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.05),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
-        ),
-        child: Icon(icon, size: 18, color: Colors.white70),
       ),
     );
   }
