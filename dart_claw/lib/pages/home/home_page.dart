@@ -64,15 +64,18 @@ class HomePage extends StatelessWidget {
                 padding: EdgeInsets.all(16),
                 child: Row(
                   children: [
-                    Obx(() => Text(
-                      logic.currentSessionTitle,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.white,
-                      ),
-                    )),
-                    Spacer(),
+                    Expanded(
+                      child: Obx(() => Text(
+                        logic.currentSessionTitle,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.white,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      )),
+                    ),
+                    const SizedBox(width: 5),
                     Obx(() {
                       final hasAllowAll = logic.allowAllTools.value;
                       return Stack(

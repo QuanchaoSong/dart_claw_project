@@ -142,7 +142,7 @@ class _ContentBubble extends StatelessWidget {
 // 可折叠 Reasoning 区块
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _ReasoningBlock extends StatelessWidget {
+class _ReasoningBlock extends StatefulWidget {
   const _ReasoningBlock({
     required this.reasoning,
     required this.isStreaming,
@@ -154,6 +154,33 @@ class _ReasoningBlock extends StatelessWidget {
   final bool isStreaming;
   final bool isExpanded;
   final VoidCallback onToggle;
+
+  @override
+  State<_ReasoningBlock> createState() => _ReasoningBlockState();
+}
+
+class _ReasoningBlockState extends State<_ReasoningBlock> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void didUpdateWidget(_ReasoningBlock oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isStreaming && widget.reasoning != oldWidget.reasoning) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollController.hasClients) {
+          _scrollController.jumpTo(
+            _scrollController.position.maxScrollExtent,
+          );
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -170,7 +197,7 @@ class _ReasoningBlock extends StatelessWidget {
         children: [
           // 标题行（始终可见）
           InkWell(
-            onTap: onToggle,
+            onTap: widget.onToggle,
             borderRadius: BorderRadius.circular(10),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -183,7 +210,7 @@ class _ReasoningBlock extends StatelessWidget {
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    isStreaming ? '思考中…' : '已思考',
+                    widget.isStreaming ? '思考中…' : '已思考',
                     style: const TextStyle(
                       color: AppColors.reasoningAccent,
                       fontSize: 12,
@@ -192,7 +219,7 @@ class _ReasoningBlock extends StatelessWidget {
                   ),
                   const Spacer(),
                   Icon(
-                    isExpanded ? Icons.expand_less : Icons.expand_more,
+                    widget.isExpanded ? Icons.expand_less : Icons.expand_more,
                     size: 16,
                     color: AppColors.reasoningAccent,
                   ),
@@ -203,15 +230,16 @@ class _ReasoningBlock extends StatelessWidget {
           // 动画展开/收起内容
           AnimatedCrossFade(
             duration: const Duration(milliseconds: 200),
-            crossFadeState: isExpanded
+            crossFadeState: widget.isExpanded
                 ? CrossFadeState.showFirst
                 : CrossFadeState.showSecond,
             firstChild: Container(
               constraints: const BoxConstraints(maxHeight: 240),
               child: SingleChildScrollView(
+                controller: _scrollController,
                 padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
                 child: Text(
-                  reasoning,
+                  widget.reasoning,
                   style: const TextStyle(
                     color: Colors.white38,
                     fontSize: 12,
