@@ -1,7 +1,9 @@
+import 'package:dart_claw/others/constants/color_constants.dart';
 import 'package:dart_claw/pages/home/home_logic.dart';
 import 'package:dart_claw_core/dart_claw_core.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:gpt_markdown/gpt_markdown.dart';
 
 /// AI 助手消息气泡
 ///
@@ -145,13 +147,24 @@ class _ContentBubble extends StatelessWidget {
               : Colors.white.withOpacity(0.08),
         ),
       ),
-      child: Text(
-        block.isStreaming ? '${block.content}▍' : block.content,
-        style: TextStyle(
-          color: isError ? Colors.red[300] : Colors.white,
-          fontSize: 14,
-          height: 1.5,
-        ),
+      child: SelectionArea(
+        child: block.isStreaming
+            ? GptMarkdown(
+                '${block.content}\u258d',
+                style: TextStyle(
+                  color: isError ? Colors.red[300] : Colors.white,
+                  fontSize: 14,
+                  height: 1.5,
+                ),
+              )
+            : GptMarkdown(
+                block.content,
+                style: TextStyle(
+                  color: isError ? Colors.red[300] : Colors.white,
+                  fontSize: 14,
+                  height: 1.5,
+                ),
+              ),
       ),
     );
   }
@@ -181,7 +194,7 @@ class _ReasoningBlock extends StatelessWidget {
         color: Colors.white.withOpacity(0.03),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: const Color(0xFF6366F1).withOpacity(0.25),
+          color: AppColors.reasoningAccent.withOpacity(0.25),
         ),
       ),
       child: Column(
@@ -198,13 +211,13 @@ class _ReasoningBlock extends StatelessWidget {
                   const Icon(
                     Icons.psychology_outlined,
                     size: 14,
-                    color: Color(0xFF818CF8),
+                    color: AppColors.reasoningAccent,
                   ),
                   const SizedBox(width: 6),
                   Text(
                     isStreaming ? '思考中…' : '已思考',
                     style: const TextStyle(
-                      color: Color(0xFF818CF8),
+                      color: AppColors.reasoningAccent,
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
                     ),
@@ -213,7 +226,7 @@ class _ReasoningBlock extends StatelessWidget {
                   Icon(
                     isExpanded ? Icons.expand_less : Icons.expand_more,
                     size: 16,
-                    color: const Color(0xFF818CF8),
+                    color: AppColors.reasoningAccent,
                   ),
                 ],
               ),
@@ -394,7 +407,7 @@ class _ConfirmCard extends StatelessWidget {
             children: [
               _ConfirmButton(
                 label: 'Allow',
-                color: const Color(0xFF6366F1),
+                color: AppColors.confirmAllow,
                 onTap: () => Get.find<HomeLogic>().confirmTool(
                   record.confirmRequestId!,
                   allow: true,

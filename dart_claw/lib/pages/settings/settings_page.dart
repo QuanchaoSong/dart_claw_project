@@ -1,3 +1,4 @@
+import 'package:dart_claw/others/constants/color_constants.dart';
 import 'package:dart_claw/others/model/ai_model_settings_info.dart';
 import 'package:dart_claw/pages/settings/settings_logic.dart';
 import 'package:flutter/material.dart';
@@ -46,7 +47,7 @@ class SettingsPage extends StatelessWidget {
               gradient: const LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [Color(0xFF0D1230), Color(0xFF1A1F3A)],
+                colors: [Color(0xFF0D1230), AppColors.bgMid],
               ),
               border: Border(
                 left: BorderSide(color: Colors.white.withOpacity(0.08)),
@@ -124,7 +125,7 @@ class SettingsPage extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
             color: isActive
-                ? const Color(0xFF6366F1).withOpacity(0.18)
+                ? AppColors.primary.withOpacity(0.18)
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
           ),
@@ -133,7 +134,7 @@ class SettingsPage extends StatelessWidget {
               Icon(
                 icon,
                 size: 16,
-                color: isActive ? const Color(0xFF818CF8) : Colors.white38,
+                color: isActive ? AppColors.reasoningAccent : Colors.white38,
               ),
               const SizedBox(width: 10),
               Text(
@@ -231,12 +232,12 @@ class SettingsPage extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: isSelected
-                        ? const Color(0xFF6366F1).withOpacity(0.25)
+                        ? AppColors.primary.withOpacity(0.25)
                         : Colors.white.withOpacity(0.05),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
                       color: isSelected
-                          ? const Color(0xFF6366F1).withOpacity(0.6)
+                          ? AppColors.primary.withOpacity(0.6)
                           : Colors.white.withOpacity(0.1),
                     ),
                   ),
@@ -289,12 +290,12 @@ class SettingsPage extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: isSelected
-                        ? const Color(0xFF8B5CF6).withOpacity(0.2)
+                        ? AppColors.secondary.withOpacity(0.2)
                         : Colors.white.withOpacity(0.05),
                     borderRadius: BorderRadius.circular(6),
                     border: Border.all(
                       color: isSelected
-                          ? const Color(0xFF8B5CF6).withOpacity(0.5)
+                          ? AppColors.secondary.withOpacity(0.5)
                           : Colors.white.withOpacity(0.08),
                     ),
                   ),
@@ -357,7 +358,7 @@ class SettingsPage extends StatelessWidget {
                       min: 0.0,
                       max: 2.0,
                       divisions: 20,
-                      activeColor: const Color(0xFF6366F1),
+                      activeColor: AppColors.primary,
                       inactiveColor: Colors.white12,
                       onChanged: (v) => logic.temperature.value = double.parse(
                         v.toStringAsFixed(1),
@@ -483,7 +484,7 @@ class SettingsPage extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                  colors: AppColors.primaryGradient,
                 ),
                 borderRadius: BorderRadius.circular(8),
               ),
@@ -505,7 +506,7 @@ class SettingsPage extends StatelessWidget {
   void _confirmReset(SettingsLogic logic) {
     Get.dialog(
       AlertDialog(
-        backgroundColor: const Color(0xFF1A1F3A),
+        backgroundColor: AppColors.dialogBg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         title: const Text(
           'Reset Settings',

@@ -1,5 +1,6 @@
 import 'package:dart_claw/others/model/ai_model_settings_info.dart';
 import 'package:dart_claw/others/model/session_settings_info.dart';
+import 'package:dart_claw/others/constants/color_constants.dart';
 import 'package:dart_claw/others/services/app_config_service.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -81,7 +82,7 @@ class SettingsLogic extends GetxController {
       'Settings saved successfully.',
       snackPosition: SnackPosition.BOTTOM,
       duration: const Duration(seconds: 2),
-      backgroundColor: const Color(0xFF1A1F3A),
+      backgroundColor: AppColors.dialogBg,
       colorText: Colors.white70,
     );
   }

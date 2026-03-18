@@ -6,6 +6,7 @@ enum AIProvider {
   anthropic('Anthropic', 'https://api.anthropic.com'),
   gemini('Google Gemini', 'https://generativelanguage.googleapis.com/v1beta'),
   deepseek('DeepSeek', 'https://api.deepseek.com/v1'),
+  kimi('Kimi', 'https://api.moonshot.cn/v1'),
   custom('Custom', '');
 
   final String displayName;
@@ -30,6 +31,7 @@ const Map<AIProvider, List<String>> kProviderModels = {
   ],
   AIProvider.gemini: ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'],
   AIProvider.deepseek: ['deepseek-chat', 'deepseek-reasoner'],
+  AIProvider.kimi: ['kimi-k2.5', 'kimi-k2-thinking'],
   AIProvider.custom: [],
 };
 

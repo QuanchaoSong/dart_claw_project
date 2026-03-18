@@ -1,3 +1,4 @@
+import 'package:dart_claw/others/constants/color_constants.dart';
 import 'package:dart_claw/others/services/app_config_service.dart';
 import 'package:dart_claw/pages/home/home_page.dart';
 import 'package:flutter/material.dart';
@@ -20,12 +21,12 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF0A0E27),
-        colorScheme: ColorScheme.dark(
-          primary: const Color(0xFF6366F1),
-          secondary: const Color(0xFF8B5CF6),
-          surface: const Color(0xFF1A1F3A),
-          background: const Color(0xFF0A0E27),
+        scaffoldBackgroundColor: AppColors.bgDeep,
+        colorScheme: const ColorScheme.dark(
+          primary: AppColors.primary,
+          secondary: AppColors.secondary,
+          surface: AppColors.bgMid,
+          background: AppColors.bgDeep,
         ),
         textTheme: const TextTheme(
           bodyLarge: TextStyle(color: Colors.white),

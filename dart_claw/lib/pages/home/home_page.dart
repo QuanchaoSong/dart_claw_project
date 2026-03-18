@@ -1,3 +1,4 @@
+import 'package:dart_claw/others/constants/color_constants.dart';
 import 'package:dart_claw/pages/home/home_logic.dart';
 import 'package:dart_claw/pages/home/view/claw_chat_item_cell.dart';
 import 'package:dart_claw/pages/home/view/session_info_and_settings_view.dart';
@@ -20,7 +21,7 @@ class HomePage extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF0A0E27), Color(0xFF1A1F3A), Color(0xFF0F1729)],
+            colors: [AppColors.bgDeep, AppColors.bgMid, AppColors.bgSurface],
           ),
         ),
         child: Row(
@@ -270,11 +271,8 @@ class HomePage extends StatelessWidget {
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             colors: running
-                                ? const [Color(0xFF3D2020), Color(0xFF4E2020)]
-                                : const [
-                                    Color(0xFF6366F1),
-                                    Color(0xFF8B5CF6)
-                                  ],
+                                ? const [AppColors.stopBgStart, AppColors.stopBgEnd]
+                                : AppColors.primaryGradient,
                           ),
                           borderRadius: BorderRadius.circular(12),
                         ),

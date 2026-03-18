@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:dart_claw/others/constants/color_constants.dart';
 import 'package:dart_claw/others/services/app_config_service.dart';
 import 'package:dart_claw_core/dart_claw_core.dart';
 import 'package:get/get.dart';
@@ -179,7 +180,7 @@ class HomeLogic extends GetxController {  // ─── 输入框 & 滚动控制�
     // 3. 弹窗展示（可滚动，方便阅读）
     Get.dialog(
       AlertDialog(
-        backgroundColor: const Color(0xFF1A1F3A),
+        backgroundColor: AppColors.dialogBg,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
           side: const BorderSide(color: Colors.red, width: 0.5),
