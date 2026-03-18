@@ -46,6 +46,19 @@ IMPORTANT RULES:
   /// 等待用户确认的 Completer 映射表（requestId → Completer<bool>）
   final Map<String, Completer<bool>> _pendingConfirms = {};
 
+  /// 取消标志：外部调用 [cancel] 后置 true，loop 在下一检查点退出
+  bool _cancelled = false;
+
+  /// UI 层调用：中止当前 Agent loop
+  /// 同时拒绝所有等待确认的工具调用，解除 Completer 阻塞。
+  void cancel() {
+    _cancelled = true;
+    for (final c in _pendingConfirms.values) {
+      if (!c.isCompleted) c.complete(false);
+    }
+    _pendingConfirms.clear();
+  }
+
   /// UI 层调用：用户对确认请求给出答复
   /// [allow] = true 表示允许，false 表示拒绝
   void confirm(String requestId, {required bool allow}) {
@@ -59,6 +72,7 @@ IMPORTANT RULES:
     String? assistantMessageId,
     int maxRounds = 10,
   }) async* {
+    _cancelled = false;   // 每次 run 重置取消标志
     final assistantId = assistantMessageId ?? _genId();
 
     final toolDefs = tools.map((t) => t.definition).toList();
@@ -88,6 +102,7 @@ IMPORTANT RULES:
           messages: apiMessages,
           tools: toolDefs.isEmpty ? null : toolDefs,
         )) {
+          if (_cancelled) break;   // 流式输出中途取消
           switch (delta) {
             case ClawLlmTextDelta(:final text):
               if (lastBlockType != ClawChatBlockType.content) {
@@ -119,6 +134,8 @@ IMPORTANT RULES:
           assistantId,
           toolCalls: pendingToolCalls,
         );
+
+        if (_cancelled) return;   // streaming 结束后检查
 
         // 把 assistant 本轮回复追加到 messages 供下一轮使用
         // DeepSeek Reasoner 要求 assistant 消息必须带 reasoning_content 字段
@@ -172,6 +189,9 @@ IMPORTANT RULES:
             final allowed = await completer.future;
             _pendingConfirms.remove(requestId);
 
+            // 用户取消或 cancel() 强制拒绝
+            if (_cancelled) return;
+
             if (!allowed) {
               const denial = 'Denied by user';
               apiMessages.add({
@@ -210,6 +230,7 @@ IMPORTANT RULES:
           }
         }
 
+        if (_cancelled) return;   // 工具执行完毕后检查
         yield ClawAgentLogEvent('工具执行完毕，继续调用 ${client.modelId}…');
       }
 

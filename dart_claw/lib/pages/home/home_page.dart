@@ -270,7 +270,7 @@ class HomePage extends StatelessWidget {
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             colors: running
-                                ? const [Color(0xFF2D2D4E), Color(0xFF2D2D4E)]
+                                ? const [Color(0xFF3D2020), Color(0xFF4E2020)]
                                 : const [
                                     Color(0xFF6366F1),
                                     Color(0xFF8B5CF6)
@@ -280,11 +280,14 @@ class HomePage extends StatelessWidget {
                         ),
                         child: IconButton(
                           icon: Icon(
-                            running ? Icons.hourglass_empty : Icons.send,
-                            color:
-                                running ? Colors.white38 : Colors.white,
+                            running ? Icons.stop_rounded : Icons.send,
+                            color: running
+                                ? Colors.red.shade300
+                                : Colors.white,
                           ),
-                          onPressed: running ? null : logic.submitInput,
+                          onPressed:
+                              running ? logic.stopAgent : logic.submitInput,
+                          tooltip: running ? 'Stop' : 'Send',
                         ),
                       ),
                     ],
