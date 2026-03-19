@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:dart_claw/others/constants/color_constants.dart';
 import 'package:dart_claw_core/dart_claw_core.dart';
 import 'package:flutter/material.dart';
@@ -30,7 +32,10 @@ class UserChatItemCell extends StatelessWidget {
                       children: msg.attachedPaths.map((path) {
                         return Tooltip(
                           message: path,
-                          child: Container(
+                          child: GestureDetector(
+                            onTap: () =>
+                                Process.run('open', ['-R', path]),
+                            child: Container(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
@@ -57,6 +62,7 @@ class UserChatItemCell extends StatelessWidget {
                                 ),
                               ],
                             ),
+                          ),
                           ),
                         );
                       }).toList(),
