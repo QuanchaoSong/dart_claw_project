@@ -37,47 +37,71 @@ class ShowImageTool implements ClawTool {
         'function': {
           'name': name,
           'description':
-              'Display an image to the user in the chat interface. '
-              'Accepts either an absolute local file path or an https:// URL.',
+              'Display one or more images to the user in the chat interface. '
+              'Accepts absolute local file paths (with ~ for home), https:// URLs, or a mix. '
+              'Use `paths` to show multiple images as a carousel.',
           'parameters': {
             'type': 'object',
             'properties': {
-              'path': {
-                'type': 'string',
+              'paths': {
+                'type': 'array',
+                'items': {'type': 'string'},
                 'description':
-                    'Absolute local path (e.g. /Users/foo/img.png) '
-                    'or https:// URL of the image (jpg, jpeg, png, gif, webp, bmp).',
+                    'List of image paths or URLs (jpg, jpeg, png, gif, webp, bmp). '
+                    'Accepts absolute local paths (including ~/...) and https:// URLs. '
+                    'For a single image, still use a one-element array.',
+                'minItems': 1,
               },
             },
-            'required': ['path'],
+            'required': ['paths'],
           },
         },
       };
 
   @override
   Future<ToolResult> execute(Map<String, dynamic> args) async {
-    final raw = args['path'] as String? ?? '';
-    if (raw.isEmpty) return ToolResult.failure('[error] path is required');
+    // Support both `paths` (array, primary) and legacy `path` (string).
+    final rawList = <String>[];
+    final pathsArg = args['paths'];
+    if (pathsArg is List && pathsArg.isNotEmpty) {
+      rawList.addAll(pathsArg.cast<String>());
+    } else {
+      final single = args['path'] as String? ?? '';
+      if (single.isNotEmpty) rawList.add(single);
+    }
 
-    if (_isUrl(raw)) {
+    if (rawList.isEmpty) return ToolResult.failure('[error] paths is required');
+
+    final resolved = <String>[];
+    for (final raw in rawList) {
+      if (raw.isEmpty) continue;
       final lower = raw.toLowerCase();
       if (!_validExtensions.any(lower.contains)) {
         return ToolResult.failure('[error] Not a supported image format: $raw');
       }
-      debugPrint('ShowImageTool: displaying URL $raw');
-      return ToolResult.success('[image displayed]');
+      if (_isUrl(raw)) {
+        resolved.add(raw);
+      } else {
+        final path = _expandHome(raw);
+        final file = File(path);
+        if (!await file.exists()) {
+          return ToolResult.failure('[error] File not found: $path');
+        }
+        resolved.add(path);
+      }
     }
 
-    final path = _expandHome(raw);
-    final lower = path.toLowerCase();
-    if (!_validExtensions.any(lower.endsWith)) {
-      return ToolResult.failure('[error] Not a supported image format: $path');
+    debugPrint('ShowImageTool: displaying ${resolved.length} image(s)');
+
+    if (resolved.length == 1) {
+      final p = resolved.first;
+      return _isUrl(p)
+          ? ToolResult.success('[image displayed]')
+          : ToolResult.success('[image displayed:$p]');
     }
 
-    final file = File(path);
-    if (!await file.exists()) return ToolResult.failure('[error] File not found: $path');
-
-    debugPrint('ShowImageTool: displaying $path');
-    return ToolResult.success('[image displayed:$path]');
+    // Multi: pipe-separated resolved paths (URLs kept as-is, local paths are
+    // already home-expanded so Image.file will work).
+    return ToolResult.success('[images displayed:${resolved.join('|')}]');
   }
 }
