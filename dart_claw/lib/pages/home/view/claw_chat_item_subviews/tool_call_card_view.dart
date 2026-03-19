@@ -1,5 +1,6 @@
 import 'package:dart_claw/others/constants/color_constants.dart';
 import 'package:dart_claw/pages/home/home_logic.dart';
+import 'package:dart_claw/pages/home/view/claw_chat_item_subviews/chart_card_view.dart';
 import 'package:dart_claw/pages/home/view/claw_chat_item_subviews/image_card_view.dart';
 import 'package:dart_claw_core/dart_claw_core.dart';
 import 'package:flutter/cupertino.dart';
@@ -13,6 +14,10 @@ class ToolCallCardView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (record.name == 'show_chart') {
+      return ChartCardView(record: record);
+    }
+
     if (record.name == 'show_image') {
       return ImageCardView(record: record);
     }

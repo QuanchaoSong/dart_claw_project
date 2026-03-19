@@ -5,6 +5,7 @@ import 'package:dart_claw/pages/home/view/user_chat_item_cell.dart';
 import 'package:dart_claw_core/dart_claw_core.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:path/path.dart' as p;
 
 class ChatAreaView extends StatelessWidget {
   const ChatAreaView({super.key});
@@ -220,9 +221,84 @@ class _InputArea extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ── Attachment chips ──
+            Obx(() {
+              if (logic.attachedPaths.isEmpty) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: logic.attachedPaths.map((path) {
+                    return Tooltip(
+                      message: path,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.07),
+                          borderRadius: BorderRadius.circular(6),
+                          border:
+                              Border.all(color: Colors.white.withOpacity(0.12)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.attach_file,
+                                size: 11, color: Colors.white38),
+                            const SizedBox(width: 4),
+                            ConstrainedBox(
+                              constraints:
+                                  const BoxConstraints(maxWidth: 200),
+                              child: Text(
+                                p.basename(path),
+                                style: const TextStyle(
+                                    color: Colors.white60, fontSize: 11),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            GestureDetector(
+                              onTap: () =>
+                                  logic.removeAttachedPath(path),
+                              child: const Icon(Icons.close,
+                                  size: 11, color: Colors.white38),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              );
+            }),
             Row(
               children: [
-                // 输入框
+                // ── 附件按钮 ──
+                Obx(() {
+                  if (logic.isRunning.value) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: Tooltip(
+                      message: '附加文件',
+                      child: GestureDetector(
+                        onTap: logic.pickFiles,
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.05),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                                color: Colors.white.withOpacity(0.1)),
+                          ),
+                          child: const Icon(Icons.attach_file,
+                              size: 16, color: Colors.white38),
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+                // ── 输入框 ──
                 Expanded(
                   child: Container(
                     padding: const EdgeInsets.symmetric(
@@ -256,7 +332,7 @@ class _InputArea extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 12),
-                // 发送/停止按钮
+                // ── 发送/停止按钮 ──
                 Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(

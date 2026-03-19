@@ -8,6 +8,7 @@ import 'package:dart_claw/others/tool/database_tool.dart';
 import 'package:dart_claw/pages/home/dialog/password_dialog.dart';
 import 'package:dart_claw/pages/home/dialog/skill_failure_dialog.dart';
 import 'package:dart_claw_core/dart_claw_core.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:get/get.dart';
 
 class HomeLogic extends GetxController {
@@ -46,10 +47,34 @@ class HomeLogic extends GetxController {
   /// 从输入框取文本发送，发送后清空输入框（由 UI 层调用）
   void submitInput() {
     final text = inputController.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty && attachedPaths.isEmpty) return;
     inputController.clear();
-    sendMessage(text);
+    String message = text;
+    if (attachedPaths.isNotEmpty) {
+      final paths = List<String>.from(attachedPaths);
+      attachedPaths.clear();
+      final fileRef = paths.length == 1
+          ? '[附件文件，请用 read_file 读取: ${paths.first}]'
+          : '[附件文件，请用 read_file 读取:\n${paths.map((p) => '  $p').join('\n')}]';
+      message = text.isEmpty ? fileRef : '$text\n\n$fileRef';
+    }
+    sendMessage(message);
   }
+
+  // ─── 附件 ─────────────────────────────────────────────────────────────────
+
+  final attachedPaths = <String>[].obs;
+
+  Future<void> pickFiles() async {
+    final files = await openFiles();
+    for (final f in files) {
+      if (!attachedPaths.contains(f.path)) {
+        attachedPaths.add(f.path);
+      }
+    }
+  }
+
+  void removeAttachedPath(String path) => attachedPaths.remove(path);
   // ─── 面板显示 ─────────────────────────────────────────────────────────────
 
   final showInfoPanel = true.obs;
@@ -373,6 +398,7 @@ class HomeLogic extends GetxController {
         ListDirTool(),
         SearchInFileTool(),
         ShowImageTool(),
+        ShowChartTool(),
       ],
     );
     _activeRunner = runner;
