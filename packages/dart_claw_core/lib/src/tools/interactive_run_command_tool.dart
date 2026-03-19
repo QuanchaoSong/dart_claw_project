@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import '../model/tool_result.dart';
 import 'claw_tool.dart';
 
 /// A drop-in replacement for [RunCommandTool] that handles interactive
@@ -94,7 +95,7 @@ class InteractiveRunCommandTool implements ClawTool {
       };
 
   @override
-  Future<String> execute(Map<String, dynamic> args) async {
+  Future<ToolResult> execute(Map<String, dynamic> args) async {
     final rawCommand = args['command'] as String;
     final workingDir = args['working_dir'] as String?;
 
@@ -163,7 +164,7 @@ class InteractiveRunCommandTool implements ClawTool {
           if (password == null) {
             process.kill();
             await process.exitCode;
-            return '[cancelled: user declined to provide password]';
+            return ToolResult.failure('[cancelled: user declined to provide password]');
           }
           process.stdin.writeln(password);
         }
@@ -180,7 +181,7 @@ class InteractiveRunCommandTool implements ClawTool {
           if (password == null) {
             process.kill();
             await process.exitCode;
-            return '[cancelled: user declined to provide password]';
+            return ToolResult.failure('[cancelled: user declined to provide password]');
           }
           process.stdin.writeln(password);
         }
@@ -196,6 +197,10 @@ class InteractiveRunCommandTool implements ClawTool {
     if (stdout.isNotEmpty) buf.writeln(stdout);
     if (stderr.isNotEmpty) buf.writeln('[stderr]\n$stderr');
     buf.write('[exit: $exitCode]');
-    return buf.toString();
+    return ToolResult(
+      isSuccess: exitCode == 0,
+      output: buf.toString(),
+      exitCode: exitCode,
+    );
   }
 }

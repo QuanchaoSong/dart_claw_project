@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import '../model/tool_result.dart';
 import 'claw_tool.dart';
 
 class ShowImageTool implements ClawTool {
@@ -54,29 +55,29 @@ class ShowImageTool implements ClawTool {
       };
 
   @override
-  Future<String> execute(Map<String, dynamic> args) async {
+  Future<ToolResult> execute(Map<String, dynamic> args) async {
     final raw = args['path'] as String? ?? '';
-    if (raw.isEmpty) return '[error] path is required';
+    if (raw.isEmpty) return ToolResult.failure('[error] path is required');
 
     if (_isUrl(raw)) {
       final lower = raw.toLowerCase();
       if (!_validExtensions.any(lower.contains)) {
-        return '[error] Not a supported image format: $raw';
+        return ToolResult.failure('[error] Not a supported image format: $raw');
       }
       debugPrint('ShowImageTool: displaying URL $raw');
-      return '[image displayed]';
+      return ToolResult.success('[image displayed]');
     }
 
     final path = _expandHome(raw);
     final lower = path.toLowerCase();
     if (!_validExtensions.any(lower.endsWith)) {
-      return '[error] Not a supported image format: $path';
+      return ToolResult.failure('[error] Not a supported image format: $path');
     }
 
     final file = File(path);
-    if (!await file.exists()) return '[error] File not found: $path';
+    if (!await file.exists()) return ToolResult.failure('[error] File not found: $path');
 
     debugPrint('ShowImageTool: displaying $path');
-    return '[image displayed:$path]';
+    return ToolResult.success('[image displayed:$path]');
   }
 }

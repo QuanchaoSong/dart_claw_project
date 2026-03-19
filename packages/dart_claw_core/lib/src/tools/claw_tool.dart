@@ -1,3 +1,5 @@
+import '../model/tool_result.dart';
+
 /// 单个工具的接口
 abstract interface class ClawTool {
   /// OpenAI function name（唯一标识，如 "run_command"）
@@ -9,8 +11,8 @@ abstract interface class ClawTool {
   /// OpenAI tools 格式的函数声明（用于传给 LLM）
   Map<String, dynamic> get definition;
 
-  /// 执行工具，返回结果字符串
+  /// 执行工具，返回结构化结果
   ///
   /// [args] 是 LLM 传来的参数 Map（已经过 JSON 解析）
-  Future<String> execute(Map<String, dynamic> args);
+  Future<ToolResult> execute(Map<String, dynamic> args);
 }

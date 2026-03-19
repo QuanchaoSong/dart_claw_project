@@ -1,3 +1,4 @@
+import 'package:dart_claw/pages/home/dialog/skill_picker_dialog.dart';
 import 'package:dart_claw/pages/home/home_logic.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -107,6 +108,82 @@ class SessionInfoAndSettingsView extends StatelessWidget {
                     child: _InlinePasswordField(
                       controller: logic.sudoPasswordController,
                     ),
+                  );
+                }),
+
+                // ─── Skill ───────────────────────────────────────────────
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Divider(color: Colors.white12, height: 1),
+                ),
+                const Text(
+                  'SKILL',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.white38,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Obx(() {
+                  final pending = logic.pendingSkillName.value;
+                  return Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Next message',
+                              style: TextStyle(
+                                  fontSize: 13, color: Colors.white70),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              pending ?? '自动匹配',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: pending != null
+                                    ? Colors.orange
+                                    : Colors.white38,
+                                fontWeight: pending != null
+                                    ? FontWeight.w600
+                                    : FontWeight.normal,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (pending != null)
+                        GestureDetector(
+                          onTap: () => logic.setPendingSkill(null),
+                          child: const Tooltip(
+                            message: '清除 Skill',
+                            child: Icon(Icons.close_rounded,
+                                size: 16, color: Colors.white38),
+                          ),
+                        ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () =>
+                            showSkillPickerDialog(context, logic),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.06),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                                color: Colors.white.withOpacity(0.12)),
+                          ),
+                          child: const Text(
+                            '选择',
+                            style: TextStyle(
+                                fontSize: 12, color: Colors.white70),
+                          ),
+                        ),
+                      ),
+                    ],
                   );
                 }),
               ],

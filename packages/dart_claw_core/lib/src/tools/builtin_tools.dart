@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
+import '../model/tool_result.dart';
 import 'claw_tool.dart';
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -41,7 +42,7 @@ class RunCommandTool implements ClawTool {
       };
 
   @override
-  Future<String> execute(Map<String, dynamic> args) async {
+  Future<ToolResult> execute(Map<String, dynamic> args) async {
     final command = args['command'] as String;
     final workingDir = args['working_dir'] as String?;
 
@@ -62,7 +63,11 @@ class RunCommandTool implements ClawTool {
     if (stdout.isNotEmpty) buf.writeln(stdout);
     if (stderr.isNotEmpty) buf.writeln('[stderr]\n$stderr');
     buf.write('[exit: $exitCode]');
-    return buf.toString();
+    return ToolResult(
+      isSuccess: exitCode == 0,
+      output: buf.toString(),
+      exitCode: exitCode,
+    );
   }
 }
 
@@ -107,14 +112,14 @@ class ReadFileTool implements ClawTool {
       };
 
   @override
-  Future<String> execute(Map<String, dynamic> args) async {
+  Future<ToolResult> execute(Map<String, dynamic> args) async {
     final path = args['path'] as String;
     final startLine = args['start_line'] as int?;
     final endLine = args['end_line'] as int?;
 
     final file = File(path);
     if (!await file.exists()) {
-      return '[error] File not found: $path';
+      return ToolResult.failure('[error] File not found: $path');
     }
 
     if (startLine == null && endLine == null) {
@@ -122,9 +127,11 @@ class ReadFileTool implements ClawTool {
       // 超过 500 行时截断，避免爆 context
       final lines = content.split('\n');
       if (lines.length > 500) {
-        return '${lines.take(500).join('\n')}\n[truncated: showing first 500 of ${lines.length} lines]';
+        return ToolResult.success(
+          '${lines.take(500).join('\n')}\n[truncated: showing first 500 of ${lines.length} lines]',
+        );
       }
-      return content;
+      return ToolResult.success(content);
     }
 
     final lines = await file.readAsLines();
@@ -134,7 +141,7 @@ class ReadFileTool implements ClawTool {
       from.clamp(0, lines.length),
       (to + 1).clamp(0, lines.length),
     );
-    return slice.join('\n');
+    return ToolResult.success(slice.join('\n'));
   }
 }
 
@@ -174,14 +181,14 @@ class WriteFileTool implements ClawTool {
       };
 
   @override
-  Future<String> execute(Map<String, dynamic> args) async {
+  Future<ToolResult> execute(Map<String, dynamic> args) async {
     final path = args['path'] as String;
     final content = args['content'] as String;
 
     final file = File(path);
     await file.parent.create(recursive: true);
     await file.writeAsString(content);
-    return 'Written ${content.length} characters to $path';
+    return ToolResult.success('Written ${content.length} characters to $path');
   }
 }
 
@@ -218,11 +225,11 @@ class ListDirTool implements ClawTool {
       };
 
   @override
-  Future<String> execute(Map<String, dynamic> args) async {
+  Future<ToolResult> execute(Map<String, dynamic> args) async {
     final path = args['path'] as String;
     final dir = Directory(path);
     if (!await dir.exists()) {
-      return '[error] Directory not found: $path';
+      return ToolResult.failure('[error] Directory not found: $path');
     }
 
     final entries = <String>[];
@@ -231,7 +238,7 @@ class ListDirTool implements ClawTool {
       entries.add(entity is Directory ? '$name/' : name);
     }
     entries.sort();
-    return entries.join('\n');
+    return ToolResult.success(entries.join('\n'));
   }
 }
 
@@ -277,14 +284,14 @@ class SearchInFileTool implements ClawTool {
       };
 
   @override
-  Future<String> execute(Map<String, dynamic> args) async {
+  Future<ToolResult> execute(Map<String, dynamic> args) async {
     final path = args['path'] as String;
     final pattern = args['pattern'] as String;
     final isRegex = (args['is_regex'] as bool?) ?? false;
 
     final file = File(path);
     if (!await file.exists()) {
-      return '[error] File not found: $path';
+      return ToolResult.failure('[error] File not found: $path');
     }
 
     final lines = await file.readAsLines();
@@ -300,10 +307,12 @@ class SearchInFileTool implements ClawTool {
       }
     }
 
-    if (results.isEmpty) return '[no matches found]';
+    if (results.isEmpty) return ToolResult.success('[no matches found]');
     if (results.length > 100) {
-      return '${results.take(100).join('\n')}\n[truncated: showing first 100 of ${results.length} matches]';
+      return ToolResult.success(
+        '${results.take(100).join('\n')}\n[truncated: showing first 100 of ${results.length} matches]',
+      );
     }
-    return results.join('\n');
+    return ToolResult.success(results.join('\n'));
   }
 }

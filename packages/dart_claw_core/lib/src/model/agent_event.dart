@@ -61,6 +61,57 @@ class ClawAgentConfirmRequestEvent extends ClawAgentEvent {
   ClawAgentConfirmRequestEvent(this.requestId, this.message, this.record);
 }
 
+/// Skill 被激活（匹配成功后 emit 一次，供 UI 显示当前激活的 skill 名称）
+class ClawAgentSkillActivatedEvent extends ClawAgentEvent {
+  /// 激活的 skill name
+  final String skillName;
+
+  /// 参数占位符已替换后的 skill 全文（已注入 system prompt）
+  final String resolvedContent;
+
+  ClawAgentSkillActivatedEvent(this.skillName, this.resolvedContent);
+}
+
+/// Skill 某步骤失败，整个任务中止
+///
+/// UI 应弹出结构化失败报告，而不是普通错误弹窗。
+class ClawAgentSkillStepFailureEvent extends ClawAgentEvent {
+  /// 激活的 skill name
+  final String skillName;
+
+  /// 失败的步骤标题
+  final String stepTitle;
+
+  /// 调用的工具名（偏离检测时可能与预期不同）
+  final String toolName;
+
+  /// 工具返回的原始输出
+  final String toolOutput;
+
+  /// Skill 文件中预设的失败报告文案
+  final String failureReport;
+
+  /// 失败原因分类
+  final ClawSkillFailureReason reason;
+
+  ClawAgentSkillStepFailureEvent({
+    required this.skillName,
+    required this.stepTitle,
+    required this.toolName,
+    required this.toolOutput,
+    required this.failureReport,
+    required this.reason,
+  });
+}
+
+enum ClawSkillFailureReason {
+  /// 工具执行结果 isSuccess == false（exit code != 0 或返回 [error]）
+  toolFailed,
+
+  /// LLM 调用了 skill 步骤中未列出的工具
+  unexpectedTool,
+}
+
 /// 整个任务完成
 class ClawAgentDoneEvent extends ClawAgentEvent {
   final String summary;

@@ -2,6 +2,7 @@ import 'package:dart_claw/others/constants/color_constants.dart';
 import 'package:dart_claw/pages/settings/settings_logic.dart';
 import 'package:dart_claw/pages/settings/view/settings_ai_models_view.dart';
 import 'package:dart_claw/pages/settings/view/settings_sessions_view.dart';
+import 'package:dart_claw/pages/settings/view/settings_skills_view.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -105,6 +106,13 @@ class SettingsPage extends StatelessWidget {
             Icons.chat_bubble_outline,
             'Session',
           ),
+          const SizedBox(height: 4),
+          _buildNavItem(
+            logic,
+            SettingsSection.skills,
+            Icons.auto_fix_high_rounded,
+            'Skills',
+          ),
         ],
       ),
     );
@@ -202,6 +210,8 @@ class SettingsPage extends StatelessWidget {
         return const SettingsAiModelsView();
       case SettingsSection.session:
         return const SettingsSessionsView();
+      case SettingsSection.skills:
+        return const SettingsSkillsView();
     }
   }
 
@@ -215,11 +225,31 @@ class SettingsPage extends StatelessWidget {
       decoration: BoxDecoration(
         border: Border(top: BorderSide(color: Colors.white.withOpacity(0.06))),
       ),
-      child: Row(
-        children: [
-          // 重置按钮
-          GestureDetector(
-            onTap: () => _confirmReset(logic),
+      child: Obx(() {
+        // Skills 页面不显示 Reset/Save，改成 Skills 专属操作栏
+        if (logic.currentSection.value == SettingsSection.skills) {
+          return Row(
+            children: [
+              _footerButton(
+                icon: Icons.folder_open_outlined,
+                label: '打开目录',
+                onTap: logic.openSkillsDirectory,
+              ),
+              const SizedBox(width: 10),
+              _footerButton(
+                icon: Icons.file_upload_outlined,
+                label: '导入 Skill 文件',
+                primary: true,
+                onTap: logic.importSkillFile,
+              ),
+            ],
+          );
+        }
+        return Row(
+          children: [
+            // 重置按钮
+            GestureDetector(
+              onTap: () => _confirmReset(logic),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
               decoration: BoxDecoration(
@@ -256,6 +286,40 @@ class SettingsPage extends StatelessWidget {
             ),
           ),
         ],
+      );
+      }),
+    );
+  }
+
+  Widget _footerButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    bool primary = false,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        decoration: BoxDecoration(
+          gradient: primary
+              ? const LinearGradient(colors: AppColors.primaryGradient)
+              : null,
+          color: primary ? null : Colors.white.withOpacity(0.07),
+          borderRadius: BorderRadius.circular(8),
+          border: primary
+              ? null
+              : Border.all(color: Colors.white.withOpacity(0.1)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: Colors.white70),
+            const SizedBox(width: 6),
+            Text(label,
+                style: const TextStyle(fontSize: 13, color: Colors.white)),
+          ],
+        ),
       ),
     );
   }

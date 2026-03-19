@@ -42,6 +42,7 @@ dependencies:
   gpt_markdown: ^1.1.5
   sqflite_common_ffi: ^2.4.0+2
   path_provider: ^2.1.5
+  file_selector: ^1.1.0
 
 dev_dependencies:
   flutter_test:

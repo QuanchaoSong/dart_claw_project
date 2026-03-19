@@ -6,6 +6,7 @@ import 'package:dart_claw/others/services/app_config_service.dart';
 import 'package:dart_claw/others/model/claw_session_info.dart';
 import 'package:dart_claw/others/tool/database_tool.dart';
 import 'package:dart_claw/pages/home/dialog/password_dialog.dart';
+import 'package:dart_claw/pages/home/dialog/skill_failure_dialog.dart';
 import 'package:dart_claw_core/dart_claw_core.dart';
 import 'package:get/get.dart';
 
@@ -19,7 +20,7 @@ class HomeLogic extends GetxController {
     onKeyEvent: (node, event) {
       if (event is KeyDownEvent &&
           event.logicalKey == LogicalKeyboardKey.enter &&
-          HardwareKeyboard.instance.isShiftPressed) {
+          HardwareKeyboard.instance.isControlPressed) {
         submitInput();
         return KeyEventResult.handled;
       }
@@ -104,6 +105,28 @@ class HomeLogic extends GetxController {
   /// 当前正在流式输出的 assistant 消息 id（null 表示无流式输出）
   String? streamingMessageId;
 
+  /// 当前激活的 Skill 名称（null 表示未激活任何 Skill）
+  final activeSkillName = Rxn<String>();
+
+  /// 用户手动选定、待下一条消息使用的 Skill 名称（null = 未选定）
+  final pendingSkillName = Rxn<String>();
+
+  /// 缓存的已安装 Skill 列表（供选择弹窗使用，Settings 刷新后自动失效）
+  final _cachedSkills = <ClawSkillInfo>[];
+
+  /// 设置待发送消息使用的 Skill（null = 取消选定）
+  void setPendingSkill(String? name) => pendingSkillName.value = name;
+
+  /// 加载可用 Skill 列表（有缓存则直接返回，否则从磁盘读取）
+  Future<List<ClawSkillInfo>> loadAvailableSkills() async {
+    if (_cachedSkills.isNotEmpty) return List.unmodifiable(_cachedSkills);
+    final skills = await ClawSkillLoader.loadAll();
+    _cachedSkills
+      ..clear()
+      ..addAll(skills);
+    return List.unmodifiable(_cachedSkills);
+  }
+
   // ─── 发送消息 ─────────────────────────────────────────────────────────────
 
   /// 用户发送一条消息（由 UI 层调用）
@@ -126,7 +149,10 @@ class HomeLogic extends GetxController {
     isRunning.value = true;
     _scrollToBottom();
 
-    _runAgent(content.trim(), assistantMsg.id, history, userMsg);
+    final skillName = pendingSkillName.value;
+    pendingSkillName.value = null;
+    _runAgent(content.trim(), assistantMsg.id, history, userMsg,
+        explicitSkillName: skillName);
   }
 
   // ─── 事件处理 ─────────────────────────────────────────────────────────────
@@ -163,14 +189,39 @@ class HomeLogic extends GetxController {
         }
         break;
 
+      case ClawAgentSkillActivatedEvent(:final skillName):
+        activeSkillName.value = skillName;
+
+      case ClawAgentSkillStepFailureEvent(
+            :final skillName,
+            :final stepTitle,
+            :final toolName,
+            :final toolOutput,
+            :final failureReport,
+            :final reason,
+          ):
+        isRunning.value = false;
+        streamingMessageId = null;
+        activeSkillName.value = null;
+        _showSkillFailureDialog(
+          skillName: skillName,
+          stepTitle: stepTitle,
+          toolName: toolName,
+          toolOutput: toolOutput,
+          failureReport: failureReport,
+          reason: reason,
+        );
+
       case ClawAgentDoneEvent():
         isRunning.value = false;
         streamingMessageId = null;
+        activeSkillName.value = null;
 
       case ClawAgentErrorEvent(:final message):
         _appendError(message);
         isRunning.value = false;
         streamingMessageId = null;
+        activeSkillName.value = null;
 
       case ClawAgentLogEvent():
         // 普通日志暂不展示在消息列表，后续可加到 Info 面板
@@ -298,8 +349,9 @@ class HomeLogic extends GetxController {
     String userMessage,
     String assistantMsgId,
     List<ClawChatMessage> history,
-    ClawChatMessage userMsg,
-  ) async {
+    ClawChatMessage userMsg, {
+    String? explicitSkillName,
+  }) async {
     // ── 确保 session 存在，再持久化用户消息 ──
     await _ensureSession(firstUserMessage: userMessage);
     await _persistMessage(userMsg, messages.indexOf(userMsg));
@@ -330,6 +382,7 @@ class HomeLogic extends GetxController {
       history: history,
       assistantMessageId: assistantMsgId,
       maxRounds: cfg.session.maxRounds,
+      explicitSkillName: explicitSkillName,
     )) {
       handleEvent(event);
     }
@@ -406,6 +459,8 @@ class HomeLogic extends GetxController {
     currentSessionId.value = null;
     messages.clear();
     allowAllTools.value = false;
+    activeSkillName.value = null;
+    pendingSkillName.value = null;
   }
 
   /// 切换到已有 session
@@ -437,6 +492,26 @@ class HomeLogic extends GetxController {
       PasswordDialog(prompt: prompt),
       barrierDismissible: false,
     );
+  }
+
+  void _showSkillFailureDialog({
+    required String skillName,
+    required String stepTitle,
+    required String toolName,
+    required String toolOutput,
+    required String failureReport,
+    required ClawSkillFailureReason reason,
+  }) {
+    debugPrint('[HomeLogic] ⚠️ Skill "$skillName" failed at step "$stepTitle" when calling tool "$toolName". Reason: $reason. Tool output: $toolOutput. Failure report: $failureReport');
+
+    Get.dialog(SkillFailureDialog(
+      skillName: skillName,
+      stepTitle: stepTitle,
+      toolName: toolName,
+      toolOutput: toolOutput,
+      failureReport: failureReport,
+      reason: reason,
+    ));
   }
 
   /// 删除 session
