@@ -49,16 +49,9 @@ class HomeLogic extends GetxController {
     final text = inputController.text.trim();
     if (text.isEmpty && attachedPaths.isEmpty) return;
     inputController.clear();
-    String message = text;
-    if (attachedPaths.isNotEmpty) {
-      final paths = List<String>.from(attachedPaths);
-      attachedPaths.clear();
-      final fileRef = paths.length == 1
-          ? '[附件文件，请用 read_file 读取: ${paths.first}]'
-          : '[附件文件，请用 read_file 读取:\n${paths.map((p) => '  $p').join('\n')}]';
-      message = text.isEmpty ? fileRef : '$text\n\n$fileRef';
-    }
-    sendMessage(message);
+    final paths = List<String>.from(attachedPaths);
+    attachedPaths.clear();
+    sendMessage(text, attachedPaths: paths);
   }
 
   // ─── 附件 ─────────────────────────────────────────────────────────────────
@@ -155,15 +148,18 @@ class HomeLogic extends GetxController {
   // ─── 发送消息 ─────────────────────────────────────────────────────────────
 
   /// 用户发送一条消息（由 UI 层调用）
-  void sendMessage(String content) {
-    if (content.trim().isEmpty) return;
+  void sendMessage(String content, {List<String> attachedPaths = const []}) {
+    if (content.trim().isEmpty && attachedPaths.isEmpty) return;
     if (isRunning.value) return;
 
     // 历史消息快照（不含即将添加的新消息）
     final history = List<ClawChatMessage>.from(messages);
 
-    // 1. 添加用户消息气泡
-    final userMsg = ClawChatMessage.user(content.trim());
+    // 1. 添加用户消息气泡（存储展示文本 + 附件路径）
+    final userMsg = ClawChatMessage.user(
+      content.trim(),
+      attachedPaths: attachedPaths,
+    );
     messages.add(userMsg);
 
     // 2. 添加 assistant 占位气泡（流式输出用）
@@ -174,10 +170,22 @@ class HomeLogic extends GetxController {
     isRunning.value = true;
     _scrollToBottom();
 
+    // 构造实际发给 AI 的 prompt（包含附件路径注释）
+    final apiPrompt = _buildApiPrompt(content.trim(), attachedPaths);
+
     final skillName = pendingSkillName.value;
     pendingSkillName.value = null;
-    _runAgent(content.trim(), assistantMsg.id, history, userMsg,
+    _runAgent(apiPrompt, assistantMsg.id, history, userMsg,
         explicitSkillName: skillName);
+  }
+
+  /// 将用户文本和附件路径合并为发给 AI 的 prompt
+  static String _buildApiPrompt(String text, List<String> paths) {
+    if (paths.isEmpty) return text;
+    final fileRef = paths.length == 1
+        ? '[附件文件，请用 read_file 读取: ${paths.first}]'
+        : '[附件文件，请用 read_file 读取:\n${paths.map((p) => '  $p').join('\n')}]';
+    return text.isEmpty ? fileRef : '$text\n\n$fileRef';
   }
 
   // ─── 事件处理 ─────────────────────────────────────────────────────────────

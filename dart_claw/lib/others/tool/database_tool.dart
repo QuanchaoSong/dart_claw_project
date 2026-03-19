@@ -15,7 +15,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 /// 使用前必须调用 [init]（在 main() 或首次使用前）。
 class DatabaseTool {
   static const _dbFileName = 'dart_claw.db';
-  static const _dbVersion = 1;
+  static const _dbVersion = 2;
 
   Database? _db;
 
@@ -42,6 +42,12 @@ class DatabaseTool {
       options: OpenDatabaseOptions(
         version: _dbVersion,
         onCreate: _onCreate,
+        onUpgrade: (db, oldVersion, newVersion) async {
+          // 开发阶段直接重建，不考虑数据迁移
+          await db.execute('DROP TABLE IF EXISTS messages');
+          await db.execute('DROP TABLE IF EXISTS sessions');
+          await _onCreate(db, newVersion);
+        },
       ),
     );
   }
@@ -63,13 +69,14 @@ class DatabaseTool {
 
     await db.execute('''
       CREATE TABLE messages (
-        id          TEXT PRIMARY KEY,
-        session_id  TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-        role        TEXT NOT NULL,
-        blocks_json TEXT NOT NULL,
-        status      TEXT NOT NULL,
-        sort_index  INTEGER NOT NULL,
-        created_at  INTEGER NOT NULL
+        id             TEXT PRIMARY KEY,
+        session_id     TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+        role           TEXT NOT NULL,
+        blocks_json    TEXT NOT NULL,
+        attached_paths TEXT,
+        status         TEXT NOT NULL,
+        sort_index     INTEGER NOT NULL,
+        created_at     INTEGER NOT NULL
       )
     ''');
 
@@ -145,6 +152,9 @@ class DatabaseTool {
         'session_id': sessionId,
         'role': msg.role.name,
         'blocks_json': jsonEncode(msg.toJson()['blocks']),
+        'attached_paths': msg.attachedPaths.isEmpty
+            ? null
+            : jsonEncode(msg.attachedPaths),
         'status': msg.status.name,
         'sort_index': sortIndex,
         'created_at': msg.timestamp.millisecondsSinceEpoch,
@@ -166,12 +176,17 @@ class DatabaseTool {
 
   ClawChatMessage _rowToMessage(Map<String, dynamic> row) {
     final blocksJson = jsonDecode(row['blocks_json'] as String) as List;
+    final pathsRaw = row['attached_paths'] as String?;
+    final paths = pathsRaw != null
+        ? (jsonDecode(pathsRaw) as List).cast<String>()
+        : <String>[];
     return ClawChatMessage.fromJson({
       'id': row['id'],
       'role': row['role'],
       'timestamp': row['created_at'],
       'status': row['status'],
       'blocks': blocksJson,
+      'attached_paths': paths,
     });
   }
 

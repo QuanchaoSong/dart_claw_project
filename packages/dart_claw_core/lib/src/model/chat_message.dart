@@ -32,12 +32,16 @@ class ClawChatMessage {
   /// 有序 block 列表，代表本条消息的完整输出历史
   final List<ClawChatBlock> blocks;
 
+  /// 用户消息附带的本地文件路径（仅 user 消息使用）
+  final List<String> attachedPaths;
+
   const ClawChatMessage({
     required this.id,
     required this.role,
     required this.timestamp,
     this.status = ClawChatMessageStatus.done,
     this.blocks = const [],
+    this.attachedPaths = const [],
   });
 
   // ─── Computed getters (用于 API 序列化 & 兼容旧调用) ──────────────────────
@@ -63,12 +67,15 @@ class ClawChatMessage {
   // ─── Factory constructors ─────────────────────────────────────────────────
 
   /// 创建一条用户消息
-  factory ClawChatMessage.user(String content) => ClawChatMessage(
+  factory ClawChatMessage.user(String content,
+          {List<String> attachedPaths = const []}) =>
+      ClawChatMessage(
         id: _uuid(),
         role: ClawChatMessageRole.user,
         timestamp: DateTime.now(),
         status: ClawChatMessageStatus.done,
         blocks: [ClawContentBlock(content: content, isStreaming: false)],
+        attachedPaths: attachedPaths,
       );
 
   /// 创建一条空的 assistant 占位消息（流式输出开始时使用）
@@ -85,6 +92,7 @@ class ClawChatMessage {
   ClawChatMessage copyWith({
     ClawChatMessageStatus? status,
     List<ClawChatBlock>? blocks,
+    List<String>? attachedPaths,
   }) =>
       ClawChatMessage(
         id: id,
@@ -92,6 +100,7 @@ class ClawChatMessage {
         timestamp: timestamp,
         status: status ?? this.status,
         blocks: blocks ?? this.blocks,
+        attachedPaths: attachedPaths ?? this.attachedPaths,
       );
 
   /// 向末尾追加一个新 block
@@ -242,6 +251,7 @@ class ClawChatMessage {
         'timestamp': timestamp.millisecondsSinceEpoch,
         'status': status.name,
         'blocks': blocks.map((b) => b.toJson()).toList(),
+        if (attachedPaths.isNotEmpty) 'attached_paths': attachedPaths,
       };
 
   factory ClawChatMessage.fromJson(Map<String, dynamic> json) =>
@@ -260,6 +270,10 @@ class ClawChatMessage {
         blocks: (json['blocks'] as List<dynamic>)
             .map((b) => ClawChatBlock.fromJson(b as Map<String, dynamic>))
             .toList(),
+        attachedPaths: (json['attached_paths'] as List<dynamic>?)
+                ?.map((e) => e as String)
+                .toList() ??
+            const [],
       );
 }
 
