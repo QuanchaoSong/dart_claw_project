@@ -14,6 +14,16 @@ class ShowImageTool implements ClawTool {
     '.bmp',
   };
 
+  static bool _isUrl(String path) =>
+      path.startsWith('http://') || path.startsWith('https://');
+
+  /// Expand leading `~` to the platform home directory.
+  static String _expandHome(String path) {
+    if (!path.startsWith('~')) return path;
+    final home = Platform.environment['HOME'] ?? '';
+    return home + path.substring(1);
+  }
+
   @override
   String get name => 'show_image';
 
@@ -26,15 +36,16 @@ class ShowImageTool implements ClawTool {
         'function': {
           'name': name,
           'description':
-              'Display a local image file to the user in the chat interface. '
-              'Use this when you want to show an image from the local file system.',
+              'Display an image to the user in the chat interface. '
+              'Accepts either an absolute local file path or an https:// URL.',
           'parameters': {
             'type': 'object',
             'properties': {
               'path': {
                 'type': 'string',
                 'description':
-                    'Absolute path to the image file (jpg, jpeg, png, gif, webp, bmp).',
+                    'Absolute local path (e.g. /Users/foo/img.png) '
+                    'or https:// URL of the image (jpg, jpeg, png, gif, webp, bmp).',
               },
             },
             'required': ['path'],
@@ -44,18 +55,28 @@ class ShowImageTool implements ClawTool {
 
   @override
   Future<String> execute(Map<String, dynamic> args) async {
-    final path = args['path'] as String? ?? '';
-    if (path.isEmpty) return '[error] path is required';
+    final raw = args['path'] as String? ?? '';
+    if (raw.isEmpty) return '[error] path is required';
 
-    final file = File(path);
-    if (!await file.exists()) return '[error] File not found: $path';
+    if (_isUrl(raw)) {
+      final lower = raw.toLowerCase();
+      if (!_validExtensions.any(lower.contains)) {
+        return '[error] Not a supported image format: $raw';
+      }
+      debugPrint('ShowImageTool: displaying URL $raw');
+      return '[image displayed]';
+    }
 
+    final path = _expandHome(raw);
     final lower = path.toLowerCase();
     if (!_validExtensions.any(lower.endsWith)) {
       return '[error] Not a supported image format: $path';
     }
 
+    final file = File(path);
+    if (!await file.exists()) return '[error] File not found: $path';
+
     debugPrint('ShowImageTool: displaying $path');
-    return '[image displayed]';
+    return '[image displayed:$path]';
   }
 }

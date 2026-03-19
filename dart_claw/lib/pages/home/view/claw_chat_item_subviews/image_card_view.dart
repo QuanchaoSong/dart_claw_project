@@ -9,9 +9,45 @@ class ImageCardView extends StatelessWidget {
 
   final ClawToolCallRecord record;
 
+  Widget _buildImage(String path) {
+    final isUrl = path.startsWith('http://') || path.startsWith('https://');
+    final image = isUrl
+        ? Image.network(
+            path,
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => _errorWidget('Failed to load image'),
+          )
+        : Image.file(
+            File(path),
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => _errorWidget('Failed to load image'),
+          );
+    return ClipRRect(borderRadius: BorderRadius.circular(10), child: image);
+  }
+
+  Widget _errorWidget(String msg) => Padding(
+        padding: const EdgeInsets.all(12),
+        child: Text(msg, style: const TextStyle(color: Colors.red, fontSize: 12)),
+      );
+
   @override
   Widget build(BuildContext context) {
-    final path = record.args['path'] as String? ?? '';
+    // When the tool returns '[image displayed:/resolved/path]', extract the
+    // resolved path (home-expanded) from the result so Image.file works even
+    // when the original arg contained `~`.
+    String resolvedPath() {
+      final result = record.result ?? '';
+      const prefix = '[image displayed:';
+      if (result.startsWith(prefix) && result.endsWith(']')) {
+        return result.substring(prefix.length, result.length - 1);
+      }
+      // URL case: result is just '[image displayed]' — fall back to arg.
+      return record.args['path'] as String? ?? '';
+    }
+
+    final path = record.status == ClawToolStatus.success
+        ? resolvedPath()
+        : record.args['path'] as String? ?? '';
 
     return Container(
       constraints: const BoxConstraints(maxWidth: 480),
@@ -35,20 +71,7 @@ class ImageCardView extends StatelessWidget {
               ],
             ),
           ),
-        ClawToolStatus.success => ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: Image.file(
-              File(path),
-              fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => const Padding(
-                padding: EdgeInsets.all(12),
-                child: Text(
-                  'Failed to load image',
-                  style: TextStyle(color: Colors.red, fontSize: 12),
-                ),
-              ),
-            ),
-          ),
+        ClawToolStatus.success => _buildImage(path),
         _ => Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(

@@ -72,6 +72,7 @@ class HomePage extends StatelessWidget {
                           fontWeight: FontWeight.w500,
                           color: Colors.white,
                         ),
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       )),
                     ),
