@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -184,51 +183,32 @@ class HomeLogic extends GetxController {
 
   static const _imageExtensions = {'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'};
 
-  static String _imageMime(String ext) => switch (ext) {
-        'jpg' || 'jpeg' => 'image/jpeg',
-        'png' => 'image/png',
-        'gif' => 'image/gif',
-        'webp' => 'image/webp',
-        'bmp' => 'image/bmp',
-        _ => 'image/jpeg',
-      };
-
-  /// 构建发给 LLM 的 content。
-  /// 若有图片附件则返回 OpenAI vision 格式的 List（多模态），否则返回 String。
-  static Future<dynamic> _buildApiContent(
-      String text, List<String> paths) async {
+  /// 构建发给 LLM 的用户消息文本。
+  /// 所有附件均以路径提示告知 LLM，由 LLM 根据任务需要自行决定：
+  /// - 图片：调用 vision_read_image 进行视觉分析，或直接把路径传给工具（如 ffmpeg）
+  /// - 其他文件：调用 read_file 读取内容
+  static String _buildApiContent(String text, List<String> paths) {
+    if (paths.isEmpty) return text;
     final imagePaths = <String>[];
     final filePaths = <String>[];
     for (final p in paths) {
       final ext = p.split('.').last.toLowerCase();
       (_imageExtensions.contains(ext) ? imagePaths : filePaths).add(p);
     }
-
-    // 非图片附件 → 追加「请用 read_file 读取」提示
-    String baseText = text;
+    String result = text;
     if (filePaths.isNotEmpty) {
       final ref = filePaths.length == 1
           ? '[附件文件，请用 read_file 读取: ${filePaths.first}]'
           : '[附件文件，请用 read_file 读取:\n${filePaths.map((p) => '  $p').join('\n')}]';
-      baseText = baseText.isEmpty ? ref : '$baseText\n\n$ref';
+      result = result.isEmpty ? ref : '$result\n\n$ref';
     }
-
-    // 没有图片 → 向后兼容，返回纯字符串
-    if (imagePaths.isEmpty) return baseText;
-
-    // 有图片 → 构建多模态 content parts（OpenAI vision 格式）
-    final parts = <Map<String, dynamic>>[];
-    if (baseText.isNotEmpty) parts.add({'type': 'text', 'text': baseText});
-    for (final imgPath in imagePaths) {
-      final bytes = await File(imgPath).readAsBytes();
-      final b64 = base64Encode(bytes);
-      final ext = imgPath.split('.').last.toLowerCase();
-      parts.add({
-        'type': 'image_url',
-        'image_url': {'url': 'data:${_imageMime(ext)};base64,$b64'},
-      });
+    if (imagePaths.isNotEmpty) {
+      final ref = imagePaths.length == 1
+          ? '[附件图片: ${imagePaths.first}\n（视觉分析请调用 vision_read_image；文件处理直接使用此路径）]'
+          : '[附件图片:\n${imagePaths.map((p) => '  $p').join('\n')}\n（视觉分析请调用 vision_read_image；文件处理直接使用路径）]';
+      result = result.isEmpty ? ref : '$result\n\n$ref';
     }
-    return parts;
+    return result;
   }
 
   // ─── 事件处理 ─────────────────────────────────────────────────────────────
@@ -450,7 +430,7 @@ class HomeLogic extends GetxController {
   }) async {
     // ── 确保 session 存在，再持久化用户消息 ──
     await _ensureSession(firstUserMessage: rawText);
-    final apiContent = await _buildApiContent(rawText, attachedPaths);
+    final apiContent = _buildApiContent(rawText, attachedPaths);
     await _persistMessage(userMsg, messages.indexOf(userMsg));
 
     final cfg = AppConfigService.shared.config.value;
@@ -470,6 +450,7 @@ class HomeLogic extends GetxController {
         ListDirTool(),
         SearchInFileTool(),
         ShowImageTool(),
+        VisionReadImageTool(),
         ShowChartTool(),
         ShowVideoTool(),
         ...getWebBrowserTools(_browserProfileDir()),

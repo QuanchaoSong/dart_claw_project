@@ -316,3 +316,72 @@ class SearchInFileTool implements ClawTool {
     return ToolResult.success(results.join('\n'));
   }
 }
+
+// ──────────────────────────────────────────────────────────────────────────────
+// vision_read_image
+// ──────────────────────────────────────────────────────────────────────────────
+
+/// 读取本地图片并把 base64 注入到下一轮 LLM 调用，使模型能够“看到”图像内容。
+///
+/// 适用场景：截图分析、本地图片提问、视觉验证等。
+/// 不需要看的图片请不要调用此工具——base64 会显著十大上下文。
+class VisionReadImageTool implements ClawTool {
+  static const _supportedExts = {'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'};
+
+  @override
+  String get name => 'vision_read_image';
+
+  @override
+  bool get isDangerous => false;
+
+  @override
+  Map<String, dynamic> get definition => {
+        'type': 'function',
+        'function': {
+          'name': name,
+          'description':
+              'Load a local image file and inject it into the conversation so '
+              'you can visually inspect its content. '
+              'Call this when you need to see a screenshot, photo, or any other '
+              'image (e.g. after browser_screenshot, or when the user asks about '
+              'a specific local image). '
+              'Do NOT call this for every image path you encounter—only call it '
+              'when visual understanding is required for the current task.',
+          'parameters': {
+            'type': 'object',
+            'properties': {
+              'path': {
+                'type': 'string',
+                'description':
+                    'Absolute path to the image file '
+                    '(jpg, jpeg, png, gif, webp, bmp).',
+              },
+            },
+            'required': ['path'],
+          },
+        },
+      };
+
+  @override
+  Future<ToolResult> execute(Map<String, dynamic> args) async {
+    final rawPath = args['path'] as String;
+    final path = rawPath.startsWith('~')
+        ? rawPath.replaceFirst('~', Platform.environment['HOME'] ?? '')
+        : rawPath;
+    final ext = path.split('.').last.toLowerCase();
+    if (!_supportedExts.contains(ext)) {
+      return ToolResult.failure(
+          '[vision_read_image] Unsupported format: $ext. '
+          'Supported: ${_supportedExts.join(', ')}');
+    }
+    final file = File(path);
+    if (!await file.exists()) {
+      return ToolResult.failure('[vision_read_image] File not found: $path');
+    }
+    debugPrint('[vision_read_image] queued for vision injection: $path');
+    return ToolResult.vision(
+      output: 'Image ready: $path — visual content will be injected into the next message.',
+      imagePath: path,
+    );
+  }
+}

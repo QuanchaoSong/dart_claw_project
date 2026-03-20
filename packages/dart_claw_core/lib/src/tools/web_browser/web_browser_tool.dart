@@ -233,26 +233,21 @@ class _WebBrowserScreenshotTool implements ClawTool {
           'name': name,
           'description':
               'Capture a PNG screenshot of the current browser page and save it '
-              'to a file. Returns the absolute path to the saved file.',
+              'to a temporary file. Returns the absolute path to the saved image. '
+              'To visually inspect the screenshot, call vision_read_image with the '
+              'returned path.',
           'parameters': {
             'type': 'object',
-            'properties': {
-              'save_path': {
-                'type': 'string',
-                'description':
-                    'Absolute path where the PNG will be saved. '
-                    'Defaults to a temp file.',
-              },
-            },
+            'properties': {},
           },
         },
       };
 
   @override
   Future<ToolResult> execute(Map<String, dynamic> args) async {
-    final savePath = (args['save_path'] as String?) ??
+    final savePath =
         '${Directory.systemTemp.path}${Platform.pathSeparator}'
-            'dart_claw_screenshot_${DateTime.now().millisecondsSinceEpoch}.png';
+        'dart_claw_screenshot_${DateTime.now().millisecondsSinceEpoch}.png';
     try {
       final cdp = await _m.page;
       final result = await cdp.send('Page.captureScreenshot', params: {
@@ -265,7 +260,7 @@ class _WebBrowserScreenshotTool implements ClawTool {
       }
       final bytes = base64Decode(base64Data);
       await File(savePath).writeAsBytes(bytes);
-      return ToolResult.success('Screenshot saved to $savePath (${bytes.length} bytes)');
+      return ToolResult.success('Screenshot saved to $savePath');
     } catch (e) {
       return ToolResult.failure('[browser_screenshot error] $e');
     }

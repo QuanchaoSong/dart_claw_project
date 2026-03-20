@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
@@ -66,7 +68,7 @@ IMPORTANT RULES:
   ///
   /// 如果用户显式传入 [explicitSkillName]，跳过自动匹配直接使用对应 skill。
   Stream<ClawAgentEvent> run({
-    required dynamic userMessage,
+    required String userMessage,
     List<ClawChatMessage> history = const [],
     String? assistantMessageId,
     int maxRounds = 20,
@@ -77,22 +79,13 @@ IMPORTANT RULES:
     _cancelled = false;
     final assistantId = assistantMessageId ?? _genId();
 
-    // 如果 userMessage 是多模态 content parts，提取文本用于 skill 匹配
-    final userText = userMessage is String
-        ? userMessage
-        : (userMessage as List<dynamic>)
-            .whereType<Map<String, dynamic>>()
-            .where((p) => p['type'] == 'text')
-            .map((p) => p['text'] as String? ?? '')
-            .join(' ');
-
     final toolDefs = tools.map((t) => t.definition).toList();
     final toolMap = {for (final t in tools) t.name: t};
 
     // ─── Skill 解析阶段（匹配 + 构建 system prompt）────────────────────────────
     if (explicitSkillName == null) yield ClawAgentLogEvent('匹配 Skill…');
     final resolved = await ClawSkillResolver(client: client).resolve(
-      userText: userText,
+      userText: userMessage,
       basePrompt: _baseSystemPrompt,
       explicitSkillName: explicitSkillName,
     );
@@ -266,6 +259,30 @@ IMPORTANT RULES:
               'tool_call_id': tc.id,
               'content': result.output,
             });
+
+            // 视觉注入：工具返回 visionImagePath 时，读取文件并紧跟一条 user vision 消息
+            // 使 LLM 在下一轮调用中能直接「看到」图像内容。
+            if (result.visionImagePath != null) {
+              final imgBytes = await File(result.visionImagePath!).readAsBytes();
+              final imgMime = _visionMime(result.visionImagePath!);
+              final imgB64 = base64Encode(imgBytes);
+              apiMessages.add({
+                'role': 'user',
+                'content': [
+                  {
+                    'type': 'text',
+                    'text': 'Here is the image from the tool result:',
+                  },
+                  {
+                    'type': 'image_url',
+                    'image_url': {
+                      'url': 'data:$imgMime;base64,$imgB64',
+                    },
+                  },
+                ],
+              });
+            }
+
             yield ClawAgentToolEvent(
                 tc.copyWith(status: ClawToolStatus.success, result: result.output));
 
@@ -328,6 +345,14 @@ IMPORTANT RULES:
     }
   }
 }
+
+String _visionMime(String path) => switch (path.split('.').last.toLowerCase()) {
+      'jpg' || 'jpeg' => 'image/jpeg',
+      'gif' => 'image/gif',
+      'webp' => 'image/webp',
+      'bmp' => 'image/bmp',
+      _ => 'image/png',
+    };
 
 String _genId() {
   final now = DateTime.now().microsecondsSinceEpoch;
