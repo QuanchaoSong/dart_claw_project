@@ -1,5 +1,7 @@
 import 'package:dart_claw/others/constants/color_constants.dart';
 import 'package:dart_claw/others/services/app_config_service.dart';
+import 'package:dart_claw/others/services/scheduler_service.dart';
+import 'package:dart_claw/others/tool/database_tool.dart';
 import 'package:dart_claw/pages/home/home_page.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -10,6 +12,9 @@ void main() async {
   MediaKit.ensureInitialized();
   // 初始化配置服务（读取 ~/.dart_claw/config.json）
   await Get.putAsync(() => AppConfigService().init());
+  await DatabaseTool.shared.init();
+  await SchedulerService.instance.init();
+  
   runApp(const MyApp());
 }
 
@@ -19,7 +24,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GetMaterialApp(
-      title: 'dart Claw',
+      title: 'Dart Claw',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         brightness: Brightness.dark,

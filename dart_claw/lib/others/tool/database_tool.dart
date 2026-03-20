@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:dart_claw/others/model/claw_session_info.dart';
+import 'package:dart_claw/others/model/scheduled_task_info.dart';
 import 'package:dart_claw_core/dart_claw_core.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -15,7 +16,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 /// 使用前必须调用 [init]（在 main() 或首次使用前）。
 class DatabaseTool {
   static const _dbFileName = 'dart_claw.db';
-  static const _dbVersion = 2;
+  static const _dbVersion = 4;
 
   Database? _db;
 
@@ -46,6 +47,7 @@ class DatabaseTool {
           // 开发阶段直接重建，不考虑数据迁移
           await db.execute('DROP TABLE IF EXISTS messages');
           await db.execute('DROP TABLE IF EXISTS sessions');
+          await db.execute('DROP TABLE IF EXISTS scheduled_tasks');
           await _onCreate(db, newVersion);
         },
       ),
@@ -83,6 +85,27 @@ class DatabaseTool {
     await db.execute(
       'CREATE INDEX idx_messages_session ON messages(session_id, sort_index)',
     );
+
+    await db.execute('''
+      CREATE TABLE scheduled_tasks (
+        id                       TEXT PRIMARY KEY,
+        name                     TEXT NOT NULL,
+        mode                     TEXT NOT NULL,
+        hour                     INTEGER NOT NULL,
+        minute                   INTEGER NOT NULL,
+        weekdays                 TEXT NOT NULL DEFAULT '',
+        once_at                  INTEGER,
+        action_type              TEXT NOT NULL,
+        payload                  TEXT NOT NULL,
+        allow_all_tools          INTEGER NOT NULL DEFAULT 1,
+        allow_tool_deviation     INTEGER NOT NULL DEFAULT 1,
+        skill_name               TEXT,
+        auto_fill_sudo_password  INTEGER NOT NULL DEFAULT 0,
+        sudo_password            TEXT NOT NULL DEFAULT '',
+        is_enabled               INTEGER NOT NULL DEFAULT 1,
+        last_run_at              INTEGER
+      )
+    ''');
   }
 
   // ─── Session CRUD ─────────────────────────────────────────────────────────
@@ -196,6 +219,29 @@ class DatabaseTool {
       'messages',
       where: 'session_id = ?',
       whereArgs: [sessionId],
+    );
+  }
+
+  // ─── ScheduledTaskInfo CRUD ─────────────────────────────────────────────────
+
+  Future<List<ScheduledTaskInfo>> loadScheduledTasks() async {
+    final rows = await _database.query('scheduled_tasks', orderBy: 'name ASC');
+    return rows.map(ScheduledTaskInfo.fromMap).toList();
+  }
+
+  Future<void> upsertScheduledTask(ScheduledTaskInfo task) async {
+    await _database.insert(
+      'scheduled_tasks',
+      task.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<void> deleteScheduledTask(String id) async {
+    await _database.delete(
+      'scheduled_tasks',
+      where: 'id = ?',
+      whereArgs: [id],
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:dart_claw/others/constants/color_constants.dart';
 import 'package:dart_claw/pages/settings/settings_logic.dart';
 import 'package:dart_claw/pages/settings/view/settings_ai_models_view.dart';
+import 'package:dart_claw/pages/settings/view/settings_scheduler_view.dart';
 import 'package:dart_claw/pages/settings/view/settings_sessions_view.dart';
 import 'package:dart_claw/pages/settings/view/settings_skills_view.dart';
 import 'package:flutter/material.dart';
@@ -113,6 +114,13 @@ class SettingsPage extends StatelessWidget {
             Icons.auto_fix_high_rounded,
             'Skills',
           ),
+          const SizedBox(height: 4),
+          _buildNavItem(
+            logic,
+            SettingsSection.scheduler,
+            Icons.schedule_outlined,
+            'Scheduler',
+          ),
         ],
       ),
     );
@@ -212,6 +220,8 @@ class SettingsPage extends StatelessWidget {
         return const SettingsSessionsView();
       case SettingsSection.skills:
         return const SettingsSkillsView();
+      case SettingsSection.scheduler:
+        return const SettingsSchedulerView();
     }
   }
 
@@ -244,6 +254,10 @@ class SettingsPage extends StatelessWidget {
               ),
             ],
           );
+        }
+        // Scheduler 页面不需要 footer 按钮
+        if (logic.currentSection.value == SettingsSection.scheduler) {
+          return const SizedBox.shrink();
         }
         return Row(
           children: [
