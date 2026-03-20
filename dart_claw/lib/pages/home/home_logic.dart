@@ -421,6 +421,7 @@ class HomeLogic extends GetxController {
         ShowImageTool(),
         ShowChartTool(),
         ShowVideoTool(),
+        ...getWebBrowserTools(),
       ],
     );
     _activeRunner = runner;
