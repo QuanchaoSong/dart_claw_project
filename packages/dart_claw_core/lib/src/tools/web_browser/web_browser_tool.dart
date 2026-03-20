@@ -16,10 +16,14 @@ import 'cdp_client.dart';
 /// 所有浏览器工具共享同一个 [WebBrowserManager.instance]。浏览器在首次使用时
 /// 惰性启动，可通过 [browser_close] 工具或直接调用 [close()] 关闭。
 class WebBrowserManager {
-  WebBrowserManager._();
+  /// [profileDir]：浏览器数据目录。
+  ///   - 传入固定路径 → Cookie/登录态跨重启保留。
+  ///   - 传入 null → 每次启动都是干净的浏览器（使用临时目录）。
+  WebBrowserManager({this.profileDir});
 
-  static final WebBrowserManager instance = WebBrowserManager._();
+  static final WebBrowserManager instance = WebBrowserManager();
 
+  final String? profileDir;
   Process? _process;
   CdpClient? _page;
   final int _port = 9222;
@@ -29,7 +33,7 @@ class WebBrowserManager {
   /// 获取页面级 CDP 客户端，若浏览器尚未启动则自动启动。
   Future<CdpClient> get page async {
     if (_process != null && _page != null) return _page!;
-    final result = await WebBrowserLauncher.launch(port: _port);
+    final result = await WebBrowserLauncher.launch(port: _port, profileDir: profileDir);
     _process = result.process;
     final wsUrl = await WebBrowserLauncher.firstPageWsUrl(_port);
     _page = await CdpClient.connect(wsUrl);
@@ -81,8 +85,10 @@ class WebBrowserManager {
 // ──────────────────────────────────────────────────────────────────────────────
 
 /// 返回所有浏览器工具，共享同一个 [WebBrowserManager] 实例。
-List<ClawTool> getWebBrowserTools([WebBrowserManager? manager]) {
-  final m = manager ?? WebBrowserManager.instance;
+///
+/// [profileDir]：浏览器数据目录路径，null 表示每次使用临时目录（不保留登录）。
+List<ClawTool> getWebBrowserTools([String? profileDir]) {
+  final m = WebBrowserManager(profileDir: profileDir);
   return [
     _WebBrowserNavigateTool(m),
     _WebBrowserGetContentTool(m),

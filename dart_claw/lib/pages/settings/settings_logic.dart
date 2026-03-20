@@ -26,6 +26,7 @@ class SettingsLogic extends GetxController {
   late final RxDouble temperature;
   late final RxInt maxTokens;
   late final RxBool autoSave;
+  late final RxBool browserRememberLogin;
 
   @override
   void onInit() {
@@ -38,6 +39,7 @@ class SettingsLogic extends GetxController {
     temperature = active.temperature.obs;
     maxTokens = active.maxTokens.obs;
     autoSave = cfg.session.autoSave.obs;
+    browserRememberLogin = cfg.session.browserRememberLogin.obs;
 
     maxHistoryCountController = TextEditingController(
         text: cfg.session.maxHistoryCount.toString());
@@ -174,6 +176,7 @@ class SettingsLogic extends GetxController {
       maxHistoryCount:
           int.tryParse(maxHistoryCountController.text.trim()) ?? 50,
       maxRounds: int.tryParse(maxRoundsController.text.trim()) ?? 20,
+      browserRememberLogin: browserRememberLogin.value,
     );
     await AppConfigService.shared.saveModelSettings(modelInfo);
     await AppConfigService.shared.saveSessionSettings(sessionInfo);
@@ -187,7 +190,23 @@ class SettingsLogic extends GetxController {
       colorText: Colors.white70,
     );
   }
-
+  // ─── 清除浏览器登录数据 ───────────────────────────────────────────────
+  Future<void> clearBrowserData() async {
+    final home = Platform.environment['HOME'] ??
+        Platform.environment['USERPROFILE'] ?? '';
+    final profileDir = Directory('$home/.dart_claw/browser_profile');
+    if (await profileDir.exists()) {
+      await profileDir.delete(recursive: true);
+    }
+    Get.snackbar(
+      'Browser Data Cleared',
+      'Login sessions have been removed. You will need to log in again.',
+      snackPosition: SnackPosition.BOTTOM,
+      duration: const Duration(seconds: 3),
+      backgroundColor: AppColors.dialogBg,
+      colorText: Colors.white70,
+    );
+  }
   // ─── 重置默认值 ───────────────────────────────────────────────────────────
   Future<void> reset() async {
     await AppConfigService.shared.resetToDefaults();

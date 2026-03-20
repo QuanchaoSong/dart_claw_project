@@ -53,11 +53,15 @@ class WebBrowserLauncher {
   ///
   /// [port] CDP 监听端口，默认 9222。
   /// [headless] 是否无头模式（适合服务器环境）。
+  /// [profileDir] 浏览器 user-data-dir 路径。
+  ///   - 传入固定路径（如 ~/.dart_claw/browser_profile）：Cookie / 登录态跨重启保留。
+  ///   - 传入 null：使用系统临时目录，每次重启都是干净的浏览器。
   ///
-  /// 返回 [BrowserLaunchResult]，内含进程句柄和端口号。
+  /// 返回 [WebBrowserLaunchResult]，内含进程句柄和端口号。
   static Future<WebBrowserLaunchResult> launch({
     int port = _defaultPort,
     bool headless = false,
+    String? profileDir,
   }) async {
     final chromePath = findChromePath();
     if (chromePath == null) {
@@ -67,8 +71,8 @@ class WebBrowserLauncher {
       );
     }
 
-    // 使用独立 user-data-dir，避免与用户正在使用的 Chrome 会话冲突。
-    final userDataDir =
+    // profileDir 为 null 时使用临时目录（每次重启干净），否则使用调用方指定的持久化路径。
+    final userDataDir = profileDir ??
         '${Directory.systemTemp.path}${Platform.pathSeparator}dart_claw_chrome_$port';
 
     final process = await Process.start(chromePath, [

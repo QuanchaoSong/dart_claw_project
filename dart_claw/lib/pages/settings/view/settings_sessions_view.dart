@@ -59,6 +59,65 @@ class SettingsSessionsView extends StatelessWidget {
           'Maximum number of tool-call loops per message before auto-stopping.',
           style: TextStyle(fontSize: 12, color: Colors.white38),
         ),
+
+        const SizedBox(height: 28),
+        settingsSectionTitle('Browser'),
+        const SizedBox(height: 12),
+
+        // Remember browser logins switch
+        Obx(
+          () => _buildSwitchRow(
+            label: 'Remember browser logins',
+            description:
+                'Keep cookies and login sessions across app restarts. '
+                'Turn off to always start with a fresh browser each time.',
+            value: logic.browserRememberLogin.value,
+            onChanged: (v) => logic.browserRememberLogin.value = v,
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Clear browser data button
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.04),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.white.withOpacity(0.07)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Clear Browser Data',
+                      style: TextStyle(fontSize: 14, color: Colors.white),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Remove all saved cookies and login sessions immediately. '
+                      'You will need to log in again on each website.',
+                      style: TextStyle(fontSize: 12, color: Colors.white38),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              TextButton(
+                onPressed: logic.clearBrowserData,
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.redAccent,
+                  side: const BorderSide(color: Colors.redAccent, width: 0.8),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 8),
+                ),
+                child: const Text('Clear'),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }

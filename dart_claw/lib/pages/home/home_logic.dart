@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -381,6 +382,16 @@ class HomeLogic extends GetxController {
   /// 使用 [ClawAgentRunner] 运行一轮 Agent 对话
   ClawAgentRunner? _activeRunner;
 
+  /// 根据配置返回浏览器 profileDir。
+  /// null 表示不保留登录（每次使用临时目录）。
+  String? _browserProfileDir() {
+    final cfg = AppConfigService.shared.config.value;
+    if (!cfg.session.browserRememberLogin) return null;
+    final home = Platform.environment['HOME'] ??
+        Platform.environment['USERPROFILE'] ?? '';
+    return '$home/.dart_claw/browser_profile';
+  }
+
   /// UI 层调用：将用户对工具确认的结果回传给 Runner
   void confirmTool(String requestId, {required bool allow}) {
     _activeRunner?.confirm(requestId, allow: allow);
@@ -421,7 +432,7 @@ class HomeLogic extends GetxController {
         ShowImageTool(),
         ShowChartTool(),
         ShowVideoTool(),
-        ...getWebBrowserTools(),
+        ...getWebBrowserTools(_browserProfileDir()),
       ],
     );
     _activeRunner = runner;
