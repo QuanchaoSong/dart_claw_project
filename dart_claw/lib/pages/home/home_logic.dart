@@ -81,6 +81,9 @@ class HomeLogic extends GetxController {
   /// 当前 session 内所有危险工具都自动放行（无需逐次确认）
   final allowAllTools = false.obs;
 
+  /// Skill 模式下，工具偏离预期时是否允许继续（true = 警告后继续；false = 立即中止）
+  final allowToolDeviation = true.obs;
+
   /// 遇到 sudo 密码提示时自动填入 [sudoPasswordController] 中存储的密码
   final autoFillSudoPassword = false.obs;
 
@@ -417,6 +420,7 @@ class HomeLogic extends GetxController {
       assistantMessageId: assistantMsgId,
       maxRounds: cfg.session.maxRounds,
       explicitSkillName: explicitSkillName,
+      allowToolDeviation: allowToolDeviation.value,
     )) {
       handleEvent(event);
     }
@@ -493,6 +497,7 @@ class HomeLogic extends GetxController {
     currentSessionId.value = null;
     messages.clear();
     allowAllTools.value = false;
+    allowToolDeviation.value = true;
     activeSkillName.value = null;
     pendingSkillName.value = null;
   }
@@ -503,6 +508,7 @@ class HomeLogic extends GetxController {
     if (isRunning.value) return; // 运行中禁止切换
     await _loadSession(sessionId);
     allowAllTools.value = false;
+    allowToolDeviation.value = true;
   }
 
   /// 重命名 session

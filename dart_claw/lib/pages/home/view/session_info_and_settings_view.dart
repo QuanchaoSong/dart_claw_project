@@ -93,6 +93,15 @@ class SessionInfoAndSettingsView extends StatelessWidget {
                 const SizedBox(height: 12),
                 Obx(
                   () => _ToggleRow(
+                    label: 'Allow tool deviation',
+                    subtitle: 'Skill 偏离预定工具时警告后继续，而非立即中止',
+                    value: logic.allowToolDeviation.value,
+                    onChanged: (v) => logic.allowToolDeviation.value = v,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Obx(
+                  () => _ToggleRow(
                     label: 'Auto-fill sudo password',
                     subtitle: 'Skip password dialog for sudo commands',
                     value: logic.autoFillSudoPassword.value,

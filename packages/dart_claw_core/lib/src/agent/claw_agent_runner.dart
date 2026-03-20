@@ -73,6 +73,8 @@ IMPORTANT RULES:
     String? assistantMessageId,
     int maxRounds = 20,
     String? explicitSkillName,
+    /// 工具偏离时是否允许继续（true = 记录警告继续；false = 立即中止）
+    bool allowToolDeviation = true,
   }) async* {
     _cancelled = false;
     final assistantId = assistantMessageId ?? _genId();
@@ -227,18 +229,28 @@ $resolvedContent''';
                 skillSteps[skillStepIndex.clamp(0, skillSteps.length - 1)];
             if (currentStep.expectedTools.isNotEmpty &&
                 !currentStep.expectedTools.contains(tc.name)) {
-              yield ClawAgentToolEvent(tc.copyWith(
-                  status: ClawToolStatus.error,
-                  result: 'Unexpected tool for this skill step'));
-              yield ClawAgentSkillStepFailureEvent(
-                skillName: skillMatch.skill.name,
-                stepTitle: currentStep.title,
-                toolName: tc.name,
-                toolOutput: '',
-                failureReport: currentStep.failureReport,
-                reason: ClawSkillFailureReason.unexpectedTool,
-              );
-              return;
+              if (allowToolDeviation) {
+                // 软警告：记录偏离但继续执行
+                yield ClawAgentLogEvent(
+                  '⚠️ Skill "${skillMatch.skill.name}" 步骤 "${currentStep.title}" '
+                  '期望工具 ${currentStep.expectedTools.join("/")}，'
+                  '实际调用了 ${tc.name}，偏离了预定路径但继续执行。',
+                );
+              } else {
+                // 严格模式：立即中止
+                yield ClawAgentToolEvent(tc.copyWith(
+                    status: ClawToolStatus.error,
+                    result: 'Unexpected tool for this skill step'));
+                yield ClawAgentSkillStepFailureEvent(
+                  skillName: skillMatch.skill.name,
+                  stepTitle: currentStep.title,
+                  toolName: tc.name,
+                  toolOutput: '',
+                  failureReport: currentStep.failureReport,
+                  reason: ClawSkillFailureReason.unexpectedTool,
+                );
+                return;
+              }
             }
           }
 
