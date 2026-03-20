@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:dart_claw/others/constants/color_constants.dart';
 import 'package:dart_claw/others/services/app_config_service.dart';
+import 'package:dart_claw/others/tool/snackbar_tool.dart';
 import 'package:dart_claw/others/model/claw_session_info.dart';
 import 'package:dart_claw/others/tool/database_tool.dart';
 import 'package:dart_claw/pages/home/dialog/password_dialog.dart';
@@ -239,14 +240,23 @@ class HomeLogic extends GetxController {
         isRunning.value = false;
         streamingMessageId = null;
         activeSkillName.value = null;
-        _showSkillFailureDialog(
-          skillName: skillName,
-          stepTitle: stepTitle,
-          toolName: toolName,
-          toolOutput: toolOutput,
-          failureReport: failureReport,
-          reason: reason,
-        );
+        if (allowToolDeviation.value) {
+          // 宽松模式：snackbar 轻提示，不打断用户
+          SnackbarTool.showWarning(
+            'Skill "$skillName" 失败于「$stepTitle」'
+            '${reason == ClawSkillFailureReason.unexpectedTool ? '（工具偏离）' : ''}',
+          );
+        } else {
+          // 严格模式：弹窗展示详情
+          _showSkillFailureDialog(
+            skillName: skillName,
+            stepTitle: stepTitle,
+            toolName: toolName,
+            toolOutput: toolOutput,
+            failureReport: failureReport,
+            reason: reason,
+          );
+        }
 
       case ClawAgentDoneEvent():
         isRunning.value = false;
