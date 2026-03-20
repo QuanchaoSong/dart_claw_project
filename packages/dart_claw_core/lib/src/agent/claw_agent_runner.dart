@@ -8,9 +8,7 @@ import '../model/agent_event.dart';
 import '../model/chat_block.dart';
 import '../model/chat_message.dart';
 import '../model/tool_call_record.dart';
-import '../skill/claw_skill_info.dart';
-import '../skill/claw_skill_loader.dart';
-import '../skill/claw_skill_matcher.dart';
+import '../skill/claw_skill_resolver.dart';
 import '../tools/builtin_tools.dart';
 import '../tools/claw_tool.dart';
 
@@ -22,7 +20,7 @@ class ClawAgentRunner {
   final List<ClawTool> tools;
 
   static const _baseSystemPrompt = '''
-You are dart Claw, an expert AI coding assistant running on the user's local machine.
+You are Dart Claw, an expert AI coding assistant running on the user's local machine.
 You help users with programming tasks.
 
 IMPORTANT RULES:
@@ -68,7 +66,7 @@ IMPORTANT RULES:
   ///
   /// 如果用户显式传入 [explicitSkillName]，跳过自动匹配直接使用对应 skill。
   Stream<ClawAgentEvent> run({
-    required String userMessage,
+    required dynamic userMessage,
     List<ClawChatMessage> history = const [],
     String? assistantMessageId,
     int maxRounds = 20,
@@ -78,62 +76,35 @@ IMPORTANT RULES:
   }) async* {
     _cancelled = false;
     final assistantId = assistantMessageId ?? _genId();
+
+    // 如果 userMessage 是多模态 content parts，提取文本用于 skill 匹配
+    final userText = userMessage is String
+        ? userMessage
+        : (userMessage as List<dynamic>)
+            .whereType<Map<String, dynamic>>()
+            .where((p) => p['type'] == 'text')
+            .map((p) => p['text'] as String? ?? '')
+            .join(' ');
+
     final toolDefs = tools.map((t) => t.definition).toList();
     final toolMap = {for (final t in tools) t.name: t};
 
-    // ─── Skill 匹配阶段 ──────────────────────────────────────────────────────
-    ClawSkillMatch? skillMatch;
-    try {
-      final availableSkills = await ClawSkillLoader.loadAll();
-      if (availableSkills.isNotEmpty) {
-        if (explicitSkillName != null) {
-          // 手动指定：直接查找目标 skill，参数由 LLM 提取
-          final target =
-              availableSkills.where((s) => s.name == explicitSkillName).firstOrNull;
-          if (target != null) {
-            skillMatch = await ClawSkillMatcher(client: client).match(
-              userTask: userMessage,
-              availableSkills: [target],
-            );
-          }
-        } else {
-          // 自动匹配
-          yield ClawAgentLogEvent('匹配 Skill…');
-          skillMatch = await ClawSkillMatcher(client: client).match(
-            userTask: userMessage,
-            availableSkills: availableSkills,
-          );
-        }
-      }
-    } catch (e) {
-      debugPrint('[ClawAgentRunner] Skill matching failed: $e');
-      // 匹配失败不阻断任务，继续按普通流程执行
+    // ─── Skill 解析阶段（匹配 + 构建 system prompt）────────────────────────────
+    if (explicitSkillName == null) yield ClawAgentLogEvent('匹配 Skill…');
+    final resolved = await ClawSkillResolver(client: client).resolve(
+      userText: userText,
+      basePrompt: _baseSystemPrompt,
+      explicitSkillName: explicitSkillName,
+    );
+    if (resolved.hasSkill) {
+      yield ClawAgentSkillActivatedEvent(
+          resolved.match!.skill.name, resolved.resolvedSkillContent!);
     }
-
-    // ─── 构建 system prompt ──────────────────────────────────────────────────
-    String systemPrompt = _baseSystemPrompt;
-    List<ClawSkillStep> skillSteps = [];
-
-    if (skillMatch != null) {
-      final resolvedContent = skillMatch.skill.resolveAndFormat(skillMatch.params);
-      skillSteps = skillMatch.skill.steps;
-      systemPrompt = '''
-$_baseSystemPrompt
-
----
-
-You are currently executing a SKILL. Follow the rules below WITHOUT EXCEPTION:
-1. Execute ONLY the steps defined in the skill, in order. Do NOT introduce tools or methods not listed in a step's "Expected tools".
-2. If any step fails (non-zero exit code or error output), you MUST stop immediately. Do NOT try alternative approaches.
-3. Report failures exactly as specified in the step's "Failure report" field.
-
-$resolvedContent''';
-
-      yield ClawAgentSkillActivatedEvent(skillMatch.skill.name, resolvedContent);
-    }
+    final skillMatch = resolved.match;
+    final skillSteps = resolved.skillSteps;
 
     final apiMessages = <Map<String, dynamic>>[
-      {'role': 'system', 'content': systemPrompt},
+      {'role': 'system', 'content': resolved.systemPrompt},
       for (final msg in history)
         if (msg.role != ClawChatMessageRole.system)
           ...msg.toApiMessages(),

@@ -9,6 +9,7 @@ export 'src/model/tool_result.dart';
 export 'src/skill/claw_skill_info.dart';
 export 'src/skill/claw_skill_loader.dart';
 export 'src/skill/claw_skill_matcher.dart';
+export 'src/skill/claw_skill_resolver.dart';
 export 'src/llm/claw_llm_delta.dart';
 export 'src/llm/claw_llm_client.dart';
 export 'src/agent/claw_agent_runner.dart';

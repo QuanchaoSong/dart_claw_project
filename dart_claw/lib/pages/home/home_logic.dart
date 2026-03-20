@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -175,22 +176,59 @@ class HomeLogic extends GetxController {
     isRunning.value = true;
     _scrollToBottom();
 
-    // 构造实际发给 AI 的 prompt（包含附件路径注释）
-    final apiPrompt = _buildApiPrompt(content.trim(), attachedPaths);
-
     final skillName = pendingSkillName.value;
     pendingSkillName.value = null;
-    _runAgent(apiPrompt, assistantMsg.id, history, userMsg,
+    _runAgent(content.trim(), attachedPaths, assistantMsg.id, history, userMsg,
         explicitSkillName: skillName);
   }
 
-  /// 将用户文本和附件路径合并为发给 AI 的 prompt
-  static String _buildApiPrompt(String text, List<String> paths) {
-    if (paths.isEmpty) return text;
-    final fileRef = paths.length == 1
-        ? '[附件文件，请用 read_file 读取: ${paths.first}]'
-        : '[附件文件，请用 read_file 读取:\n${paths.map((p) => '  $p').join('\n')}]';
-    return text.isEmpty ? fileRef : '$text\n\n$fileRef';
+  static const _imageExtensions = {'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'};
+
+  static String _imageMime(String ext) => switch (ext) {
+        'jpg' || 'jpeg' => 'image/jpeg',
+        'png' => 'image/png',
+        'gif' => 'image/gif',
+        'webp' => 'image/webp',
+        'bmp' => 'image/bmp',
+        _ => 'image/jpeg',
+      };
+
+  /// 构建发给 LLM 的 content。
+  /// 若有图片附件则返回 OpenAI vision 格式的 List（多模态），否则返回 String。
+  static Future<dynamic> _buildApiContent(
+      String text, List<String> paths) async {
+    final imagePaths = <String>[];
+    final filePaths = <String>[];
+    for (final p in paths) {
+      final ext = p.split('.').last.toLowerCase();
+      (_imageExtensions.contains(ext) ? imagePaths : filePaths).add(p);
+    }
+
+    // 非图片附件 → 追加「请用 read_file 读取」提示
+    String baseText = text;
+    if (filePaths.isNotEmpty) {
+      final ref = filePaths.length == 1
+          ? '[附件文件，请用 read_file 读取: ${filePaths.first}]'
+          : '[附件文件，请用 read_file 读取:\n${filePaths.map((p) => '  $p').join('\n')}]';
+      baseText = baseText.isEmpty ? ref : '$baseText\n\n$ref';
+    }
+
+    // 没有图片 → 向后兼容，返回纯字符串
+    if (imagePaths.isEmpty) return baseText;
+
+    // 有图片 → 构建多模态 content parts（OpenAI vision 格式）
+    final parts = <Map<String, dynamic>>[];
+    if (baseText.isNotEmpty) parts.add({'type': 'text', 'text': baseText});
+    for (final imgPath in imagePaths) {
+      final bytes = await File(imgPath).readAsBytes();
+      final b64 = base64Encode(bytes);
+      final ext = imgPath.split('.').last.toLowerCase();
+      parts.add({
+        'type': 'image_url',
+        'image_url': {'url': 'data:${_imageMime(ext)};base64,$b64'},
+      });
+    }
+    return parts;
   }
 
   // ─── 事件处理 ─────────────────────────────────────────────────────────────
@@ -403,14 +441,16 @@ class HomeLogic extends GetxController {
   }
 
   Future<void> _runAgent(
-    String userMessage,
+    String rawText,
+    List<String> attachedPaths,
     String assistantMsgId,
     List<ClawChatMessage> history,
     ClawChatMessage userMsg, {
     String? explicitSkillName,
   }) async {
     // ── 确保 session 存在，再持久化用户消息 ──
-    await _ensureSession(firstUserMessage: userMessage);
+    await _ensureSession(firstUserMessage: rawText);
+    final apiContent = await _buildApiContent(rawText, attachedPaths);
     await _persistMessage(userMsg, messages.indexOf(userMsg));
 
     final cfg = AppConfigService.shared.config.value;
@@ -438,7 +478,7 @@ class HomeLogic extends GetxController {
     _activeRunner = runner;
 
     await for (final event in runner.run(
-      userMessage: userMessage,
+      userMessage: apiContent,
       history: history,
       assistantMessageId: assistantMsgId,
       maxRounds: cfg.session.maxRounds,
