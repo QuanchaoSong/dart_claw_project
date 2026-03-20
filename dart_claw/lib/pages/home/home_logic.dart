@@ -420,6 +420,7 @@ class HomeLogic extends GetxController {
         SearchInFileTool(),
         ShowImageTool(),
         ShowChartTool(),
+        ShowVideoTool(),
       ],
     );
     _activeRunner = runner;

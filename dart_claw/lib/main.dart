@@ -3,9 +3,11 @@ import 'package:dart_claw/others/services/app_config_service.dart';
 import 'package:dart_claw/pages/home/home_page.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:media_kit/media_kit.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  MediaKit.ensureInitialized();
   // 初始化配置服务（读取 ~/.dart_claw/config.json）
   await Get.putAsync(() => AppConfigService().init());
   runApp(const MyApp());
