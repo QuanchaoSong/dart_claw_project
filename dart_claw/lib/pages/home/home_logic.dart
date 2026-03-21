@@ -9,6 +9,7 @@ import 'package:dart_claw/others/tool/snackbar_tool.dart';
 import 'package:dart_claw/others/model/claw_session_info.dart';
 import 'package:dart_claw/others/tool/database_tool.dart';
 import 'package:dart_claw/pages/home/dialog/password_dialog.dart';
+import 'package:dart_claw/pages/home/dialog/ask_user_dialog.dart';
 import 'package:dart_claw/pages/home/dialog/skill_failure_dialog.dart';
 import 'package:dart_claw_core/dart_claw_core.dart';
 import 'package:file_selector/file_selector.dart';
@@ -599,10 +600,15 @@ class HomeLogic extends GetxController {
     );
   }
 
-  // ─── ask_user 内联卡片（Plan B）─────────────────────────────────────────────
+  // ─── ask_user 内联卡片（Plan B）/ Dialog（Plan A）───────────────────────────
 
-  /// AskUserTool 回调：在聊天区域渲染内联输入卡片，等待用户作答。
+  /// AskUserTool 回调：根据设置决定用 Dialog 还是内联卡片。
   Future<String?> _promptAskUser(AskUserRequest request) {
+    final useDialog = AppConfigService.shared.config.value.session.askUserUseDialog;
+    if (useDialog) {
+      return Get.dialog<String>(AskUserDialog(request: request));
+    }
+    // Plan B：内联卡片
     final requestId = _newId();
     final completer = Completer<String?>();
     pendingUserInput.value = PendingUserInput(

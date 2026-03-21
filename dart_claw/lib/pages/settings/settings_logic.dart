@@ -27,6 +27,7 @@ class SettingsLogic extends GetxController {
   late final RxInt maxTokens;
   late final RxBool autoSave;
   late final RxBool browserRememberLogin;
+  late final RxBool askUserUseDialog;
 
   @override
   void onInit() {
@@ -40,6 +41,7 @@ class SettingsLogic extends GetxController {
     maxTokens = active.maxTokens.obs;
     autoSave = cfg.session.autoSave.obs;
     browserRememberLogin = cfg.session.browserRememberLogin.obs;
+    askUserUseDialog = cfg.session.askUserUseDialog.obs;
 
     maxHistoryCountController = TextEditingController(
         text: cfg.session.maxHistoryCount.toString());
@@ -177,6 +179,7 @@ class SettingsLogic extends GetxController {
           int.tryParse(maxHistoryCountController.text.trim()) ?? 50,
       maxRounds: int.tryParse(maxRoundsController.text.trim()) ?? 20,
       browserRememberLogin: browserRememberLogin.value,
+      askUserUseDialog: askUserUseDialog.value,
     );
     await AppConfigService.shared.saveModelSettings(modelInfo);
     await AppConfigService.shared.saveSessionSettings(sessionInfo);

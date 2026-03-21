@@ -59,6 +59,19 @@ class SettingsSessionsView extends StatelessWidget {
           'Maximum number of tool-call loops per message before auto-stopping.',
           style: TextStyle(fontSize: 12, color: Colors.white38),
         ),
+        const SizedBox(height: 20),
+
+        // Ask-user input style switch
+        Obx(
+          () => _buildSwitchRow(
+            label: 'Use dialog for agent questions',
+            description:
+                'When the agent needs to ask you something, show a popup '
+                'dialog instead of an inline card inside the chat.',
+            value: logic.askUserUseDialog.value,
+            onChanged: (v) => logic.askUserUseDialog.value = v,
+          ),
+        ),
 
         const SizedBox(height: 28),
         settingsSectionTitle('Browser'),
