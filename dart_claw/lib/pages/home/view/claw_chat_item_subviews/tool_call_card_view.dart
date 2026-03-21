@@ -66,15 +66,15 @@ class ToolCallCardView extends StatelessWidget {
                 ),
                 if (subtitle != null) ...[
                   const SizedBox(height: 2),
-                  Text(
+                  SelectableText(
                     subtitle,
                     style: const TextStyle(
                       color: Colors.white38,
                       fontSize: 11,
                       fontFamily: 'monospace',
+                      overflow: TextOverflow.ellipsis,
                     ),
                     maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ],

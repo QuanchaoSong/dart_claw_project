@@ -23,7 +23,7 @@ class _TaskEditDialogState extends State<TaskEditDialog> {
   TimeOfDay _time = const TimeOfDay(hour: 8, minute: 0);
   List<int> _weekdays = [1, 2, 3, 4, 5];
   DateTime? _onceAt;
-  TaskActionType _actionType = TaskActionType.runCommand;
+  TaskActionType _actionType = TaskActionType.aiPrompt;
 
   // ── 执行设置 ──────────────────────────────────────────────────────────────
   bool _allowAllTools = true;

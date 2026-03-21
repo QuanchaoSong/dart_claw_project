@@ -1,6 +1,7 @@
 import 'package:dart_claw/others/constants/color_constants.dart';
 import 'package:dart_claw/pages/home/home_logic.dart';
 import 'package:dart_claw/pages/home/view/claw_chat_item_cell.dart';
+import 'package:dart_claw/pages/home/view/claw_chat_item_subviews/inline_user_input_card_view.dart';
 import 'package:dart_claw/pages/home/view/user_chat_item_cell.dart';
 import 'package:dart_claw_core/dart_claw_core.dart';
 import 'package:flutter/material.dart';
@@ -30,6 +31,16 @@ class ChatAreaView extends StatelessWidget {
               _TopBar(logic: logic),
               const Divider(color: Colors.white12, height: 1),
               _MessageList(logic: logic),
+              // ── LLM ask_user 内联输入卡片（Plan B）──
+              Obx(() {
+                final pending = logic.pendingUserInput.value;
+                if (pending == null) return const SizedBox.shrink();
+                return InlineUserInputCardView(
+                  key: ValueKey(pending.requestId),
+                  logic: logic,
+                  pending: pending,
+                );
+              }),
               const Divider(color: Colors.white12, height: 1),
               _InputArea(logic: logic),
             ],

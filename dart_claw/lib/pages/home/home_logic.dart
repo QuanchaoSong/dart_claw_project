@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -12,6 +13,19 @@ import 'package:dart_claw/pages/home/dialog/skill_failure_dialog.dart';
 import 'package:dart_claw_core/dart_claw_core.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:get/get.dart';
+
+/// LLM 发起的用户输入请求（内联卡片状态，存储在 HomeLogic.pendingUserInput）
+class PendingUserInput {
+  final String requestId;
+  final AskUserRequest request;
+  final Completer<String?> completer;
+
+  const PendingUserInput({
+    required this.requestId,
+    required this.request,
+    required this.completer,
+  });
+}
 
 class HomeLogic extends GetxController {
   // ─── 输入框 & 滚动控制器 ───────────────────────────────────────────────
@@ -133,6 +147,10 @@ class HomeLogic extends GetxController {
 
   /// 用户手动选定、待下一条消息使用的 Skill 名称（null = 未选定）
   final pendingSkillName = Rxn<String>();
+
+  /// LLM 调用 ask_user 工具时的待处理输入请求（Plan B 内联卡片）
+  /// 非 null 时 chat_area_view 会在消息列表下方渲染交互卡片
+  final pendingUserInput = Rxn<PendingUserInput>();
 
   /// 缓存的已安装 Skill 列表（供选择弹窗使用，Settings 刷新后自动失效）
   final _cachedSkills = <ClawSkillInfo>[];
@@ -418,6 +436,8 @@ class HomeLogic extends GetxController {
   /// UI 层调用：中止当前 Agent loop
   void stopAgent() {
     _activeRunner?.cancel();
+    // 同时取消内联用户输入卡片（让 Completer 返回 null 通知 AskUserTool）
+    _cancelPendingUserInput();
   }
 
   Future<void> _runAgent(
@@ -445,6 +465,7 @@ class HomeLogic extends GetxController {
       client: client,
       tools: [
         InteractiveRunCommandTool(onPasswordRequired: _promptPassword),
+        AskUserTool(onAskUser: _promptAskUser),
         ReadFileTool(),
         WriteFileTool(),
         ListDirTool(),
@@ -576,6 +597,39 @@ class HomeLogic extends GetxController {
       PasswordDialog(prompt: prompt),
       barrierDismissible: false,
     );
+  }
+
+  // ─── ask_user 内联卡片（Plan B）─────────────────────────────────────────────
+
+  /// AskUserTool 回调：在聊天区域渲染内联输入卡片，等待用户作答。
+  Future<String?> _promptAskUser(AskUserRequest request) {
+    final requestId = _newId();
+    final completer = Completer<String?>();
+    pendingUserInput.value = PendingUserInput(
+      requestId: requestId,
+      request: request,
+      completer: completer,
+    );
+    _scrollToBottom();
+    return completer.future;
+  }
+
+  /// UI 层调用：用户提交了内联卡片的答案
+  void respondUserInput(String requestId, String value) {
+    final pending = pendingUserInput.value;
+    if (pending == null || pending.requestId != requestId) return;
+    pendingUserInput.value = null;
+    pending.completer.complete(value);
+  }
+
+  /// UI 层调用：用户取消了内联卡片
+  void cancelUserInput(String requestId) => _cancelPendingUserInput();
+
+  void _cancelPendingUserInput() {
+    final pending = pendingUserInput.value;
+    if (pending == null) return;
+    pendingUserInput.value = null;
+    pending.completer.complete(null);
   }
 
   void _showSkillFailureDialog({
