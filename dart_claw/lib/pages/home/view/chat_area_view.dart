@@ -146,6 +146,42 @@ class _TopBar extends StatelessWidget {
               ),
             );
           }),
+          // Compressing badge（上下文压缩进行中）
+          Obx(() {
+            if (!logic.isCompressing.value) return const SizedBox.shrink();
+            return Container(
+              margin: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.teal.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                    color: Colors.teal.withOpacity(0.5), width: 1),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 10,
+                    height: 10,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 1.5,
+                      color: Colors.teal.shade300,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Compressing…',
+                    style: TextStyle(
+                      color: Colors.teal.shade300,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
           const SizedBox(width: 5),
           Obx(() {
             final hasAllowAll = logic.allowAllTools.value;
@@ -209,9 +245,51 @@ class _MessageList extends StatelessWidget {
   }
 
   Widget _buildBubble(ClawChatMessage msg) {
+    if (msg.type == ClawChatMessageType.divider) {
+      return _ContextDivider(key: ValueKey(msg.id));
+    }
     return msg.role == ClawChatMessageRole.user
         ? UserChatItemCell(key: ValueKey(msg.id), msg: msg)
         : ClawChatItemCell(key: ValueKey(msg.id), msg: msg);
+  }
+}
+
+/// 上下文压缩完成后插入的视觉分隔行
+class _ContextDivider extends StatelessWidget {
+  const _ContextDivider({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Divider(
+              color: Colors.teal.withOpacity(0.25),
+              thickness: 1,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Text(
+              'Context compressed',
+              style: TextStyle(
+                fontSize: 10,
+                color: Colors.teal.withOpacity(0.55),
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Divider(
+              color: Colors.teal.withOpacity(0.25),
+              thickness: 1,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

@@ -98,6 +98,12 @@ IMPORTANT RULES:
 
     final apiMessages = <Map<String, dynamic>>[
       {'role': 'system', 'content': resolved.systemPrompt},
+      // 压缩摘要（type=summary 的 system 历史消息），注入在正文消息之前
+      for (final msg in history)
+        if (msg.role == ClawChatMessageRole.system &&
+            msg.type == ClawChatMessageType.summary)
+          {'role': 'system', 'content': msg.content},
+      // 正常对话消息（排除 system role，避免重复注入）
       for (final msg in history)
         if (msg.role != ClawChatMessageRole.system)
           ...msg.toApiMessages(),

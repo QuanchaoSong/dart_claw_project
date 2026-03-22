@@ -16,7 +16,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 /// 使用前必须调用 [init]（在 main() 或首次使用前）。
 class DatabaseTool {
   static const _dbFileName = 'dart_claw.db';
-  static const _dbVersion = 4;
+  static const _dbVersion = 5;
 
   Database? _db;
 
@@ -78,7 +78,11 @@ class DatabaseTool {
         attached_paths TEXT,
         status         TEXT NOT NULL,
         sort_index     INTEGER NOT NULL,
-        created_at     INTEGER NOT NULL
+        created_at     INTEGER NOT NULL,
+        type           TEXT NOT NULL DEFAULT 'message',
+        is_archived    INTEGER NOT NULL DEFAULT 0,
+        covers_from    TEXT,
+        covers_to      TEXT
       )
     ''');
 
@@ -162,7 +166,7 @@ class DatabaseTool {
 
   // ─── Message CRUD ─────────────────────────────────────────────────────────
 
-  /// 插入或替换一条消息
+  /// 插入或替换一条普通消息
   Future<void> upsertMessage(
     String sessionId,
     ClawChatMessage msg,
@@ -181,16 +185,116 @@ class DatabaseTool {
         'status': msg.status.name,
         'sort_index': sortIndex,
         'created_at': msg.timestamp.millisecondsSinceEpoch,
+        'type': 'message',
+        'is_archived': 0,
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
 
-  /// 读取某个 session 下的所有消息，按 sort_index 排序
+  /// 插入一条摘要消息（type='summary'，替代已归档的原始消息在上下文中出现）
+  Future<void> upsertSummary(
+    String sessionId,
+    ClawChatMessage msg,
+    int sortIndex, {
+    required String coversFrom,
+    required String coversTo,
+  }) async {
+    await _database.insert(
+      'messages',
+      {
+        'id': msg.id,
+        'session_id': sessionId,
+        'role': msg.role.name,
+        'blocks_json': jsonEncode(msg.toJson()['blocks']),
+        'attached_paths': null,
+        'status': msg.status.name,
+        'sort_index': sortIndex,
+        'created_at': msg.timestamp.millisecondsSinceEpoch,
+        'type': 'summary',
+        'is_archived': 0,
+        'covers_from': coversFrom,
+        'covers_to': coversTo,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  /// 插入一条分隔行（type='divider'，仅用于 UI 显示，不进入 API 上下文）
+  Future<void> upsertDivider(
+    String sessionId,
+    ClawChatMessage msg,
+    int sortIndex,
+  ) async {
+    await _database.insert(
+      'messages',
+      {
+        'id': msg.id,
+        'session_id': sessionId,
+        'role': msg.role.name,
+        'blocks_json': jsonEncode(msg.toJson()['blocks']),
+        'attached_paths': null,
+        'status': msg.status.name,
+        'sort_index': sortIndex,
+        'created_at': msg.timestamp.millisecondsSinceEpoch,
+        'type': 'divider',
+        'is_archived': 0,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  /// 将指定 id 的消息标记为已归档（从活跃上下文中移除）
+  Future<void> archiveMessages(List<String> ids) async {
+    if (ids.isEmpty) return;
+    final placeholders = List.filled(ids.length, '?').join(',');
+    await _database.rawUpdate(
+      'UPDATE messages SET is_archived = 1 WHERE id IN ($placeholders)',
+      ids,
+    );
+  }
+
+  /// 根据消息 ID 查询其 sort_index（含已归档消息）
+  Future<int?> getSortIndex(String messageId) async {
+    final rows = await _database.query(
+      'messages',
+      columns: ['sort_index'],
+      where: 'id = ?',
+      whereArgs: [messageId],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : rows.first['sort_index'] as int?;
+  }
+
+  /// 根据 id 读取某条消息（包括已归档的），用于 retrieve_message 工具
+  Future<ClawChatMessage?> loadMessageById(String id) async {
+    final rows = await _database.query(
+      'messages',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return _rowToMessage(rows.first);
+  }
+
+  /// 读取某个 session 下的活跃消息（未归档），按 sort_index 排序
+  /// 包含 summary 和 divider 行，供 UI 展示
   Future<List<ClawChatMessage>> loadMessages(String sessionId) async {
     final rows = await _database.query(
       'messages',
-      where: 'session_id = ?',
+      where: 'session_id = ? AND is_archived = 0',
+      whereArgs: [sessionId],
+      orderBy: 'sort_index ASC',
+    );
+    return rows.map(_rowToMessage).toList();
+  }
+
+  /// 读取某个 session 下用于 API 上下文构建的消息（未归档 + 非 divider）
+  Future<List<ClawChatMessage>> loadContextMessages(String sessionId) async {
+    final rows = await _database.query(
+      'messages',
+      where: "session_id = ? AND is_archived = 0 AND type != 'divider'",
       whereArgs: [sessionId],
       orderBy: 'sort_index ASC',
     );
@@ -210,6 +314,7 @@ class DatabaseTool {
       'status': row['status'],
       'blocks': blocksJson,
       'attached_paths': paths,
+      'type': row['type'] as String? ?? 'message',
     });
   }
 

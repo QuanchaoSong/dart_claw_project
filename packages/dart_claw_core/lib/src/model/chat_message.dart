@@ -4,6 +4,9 @@ import 'tool_call_record.dart';
 /// 消息角色
 enum ClawChatMessageRole { user, assistant, system }
 
+/// 消息类型（用于区分普通消息、摘要、UI 分隔行）
+enum ClawChatMessageType { message, summary, divider }
+
 /// 消息状态
 enum ClawChatMessageStatus {
   /// 用户消息已发出，等待 LLM 响应
@@ -28,6 +31,7 @@ class ClawChatMessage {
   final ClawChatMessageRole role;
   final DateTime timestamp;
   final ClawChatMessageStatus status;
+  final ClawChatMessageType type;
 
   /// 有序 block 列表，代表本条消息的完整输出历史
   final List<ClawChatBlock> blocks;
@@ -40,6 +44,7 @@ class ClawChatMessage {
     required this.role,
     required this.timestamp,
     this.status = ClawChatMessageStatus.done,
+    this.type = ClawChatMessageType.message,
     this.blocks = const [],
     this.attachedPaths = const [],
   });
@@ -87,10 +92,31 @@ class ClawChatMessage {
         blocks: const [],
       );
 
+  /// 创建一条摘要消息（role=system, type=summary，注入上下文但不显示为气泡）
+  factory ClawChatMessage.summary(String content) => ClawChatMessage(
+        id: _uuid(),
+        role: ClawChatMessageRole.system,
+        timestamp: DateTime.now(),
+        status: ClawChatMessageStatus.done,
+        type: ClawChatMessageType.summary,
+        blocks: [ClawContentBlock(content: content, isStreaming: false)],
+      );
+
+  /// 创建一条 UI 分隔行（type=divider，仅供可视化，不进入 API 上下文）
+  factory ClawChatMessage.divider() => ClawChatMessage(
+        id: _uuid(),
+        role: ClawChatMessageRole.system,
+        timestamp: DateTime.now(),
+        status: ClawChatMessageStatus.done,
+        type: ClawChatMessageType.divider,
+        blocks: const [],
+      );
+
   // ─── Mutation helpers (均返回新实例，保持不可变) ──────────────────────────
 
   ClawChatMessage copyWith({
     ClawChatMessageStatus? status,
+    ClawChatMessageType? type,
     List<ClawChatBlock>? blocks,
     List<String>? attachedPaths,
   }) =>
@@ -99,6 +125,7 @@ class ClawChatMessage {
         role: role,
         timestamp: timestamp,
         status: status ?? this.status,
+        type: type ?? this.type,
         blocks: blocks ?? this.blocks,
         attachedPaths: attachedPaths ?? this.attachedPaths,
       );
@@ -266,6 +293,10 @@ class ClawChatMessage {
         status: ClawChatMessageStatus.values.firstWhere(
           (s) => s.name == json['status'],
           orElse: () => ClawChatMessageStatus.done,
+        ),
+        type: ClawChatMessageType.values.firstWhere(
+          (t) => t.name == (json['type'] as String? ?? 'message'),
+          orElse: () => ClawChatMessageType.message,
         ),
         blocks: (json['blocks'] as List<dynamic>)
             .map((b) => ClawChatBlock.fromJson(b as Map<String, dynamic>))

@@ -1,5 +1,3 @@
-import 'package:dart_claw/others/model/session_settings_info.dart';
-
 /// 支持的 AI 服务提供商
 enum AIProvider {
   openai('OpenAI', 'https://api.openai.com/v1'),
@@ -20,6 +18,29 @@ enum AIProvider {
     );
   }
 }
+
+/// 各模型的上下文窗口大小（token 数），用于压缩触发阈值计算
+const Map<String, int> kModelContextWindows = {
+  // OpenAI
+  'gpt-4o': 128000,
+  'gpt-4o-mini': 128000,
+  'gpt-4-turbo': 128000,
+  'gpt-3.5-turbo': 16000,
+  // Anthropic
+  'claude-opus-4-6': 200000,
+  'claude-sonnet-4-5': 200000,
+  'claude-haiku-3-5': 200000,
+  // Google Gemini
+  'gemini-2.0-flash': 1000000,
+  'gemini-1.5-pro': 2000000,
+  'gemini-1.5-flash': 1000000,
+  // DeepSeek
+  'deepseek-chat': 64000,
+  'deepseek-reasoner': 64000,
+  // Kimi
+  'kimi-k2.5': 128000,
+  'kimi-k2-thinking': 128000,
+};
 
 /// 各 Provider 下的预设模型列表
 const Map<AIProvider, List<String>> kProviderModels = {
@@ -56,6 +77,12 @@ class AIModelSettingsInfo {
   String get effectiveBaseUrl => provider == AIProvider.custom
       ? (customBaseUrl ?? '')
       : provider.defaultBaseUrl;
+
+  /// 当前模型的上下文窗口大小（token），未知模型返回保守默认值 32000
+  int get contextWindow => kModelContextWindows[modelId] ?? 32000;
+
+  /// 压缩触发阈值 = contextWindow × 0.65
+  int get compressionThreshold => (contextWindow * 0.65).round();
 
   AIModelSettingsInfo copyWith({
     AIProvider? provider,

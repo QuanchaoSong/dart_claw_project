@@ -12,6 +12,8 @@ import 'package:dart_claw/pages/home/dialog/password_dialog.dart';
 import 'package:dart_claw/pages/home/dialog/ask_user_dialog.dart';
 import 'package:dart_claw/pages/home/dialog/skill_failure_dialog.dart';
 import 'package:dart_claw/others/dart_claw_core_extra_tools/mouse_keyboard_tools.dart';
+import 'package:dart_claw/others/dart_claw_core_extra_tools/retrieve_message_tool.dart';
+import 'package:dart_claw/others/compression/context_compressor.dart';
 import 'package:dart_claw_core/dart_claw_core.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:get/get.dart';
@@ -141,6 +143,8 @@ class HomeLogic extends GetxController {
   /// Agent loop 是否正在运行（用于禁用输入框、显示 loading 状态）
   final isRunning = false.obs;
   final sessionTotalTokens = 0.obs;
+  final isCompressing = false.obs;
+  int _lastPromptTokens = 0;
 
   /// 当前正在流式输出的 assistant 消息 id（null 表示无流式输出）
   String? streamingMessageId;
@@ -178,8 +182,10 @@ class HomeLogic extends GetxController {
     if (content.trim().isEmpty && attachedPaths.isEmpty) return;
     if (isRunning.value) return;
 
-    // 历史消息快照（不含即将添加的新消息）
-    final history = List<ClawChatMessage>.from(messages);
+    // 历史消息快照（不含即将添加的新消息，排除 divider 行）
+    final history = messages
+        .where((m) => m.type != ClawChatMessageType.divider)
+        .toList();
 
     // 1. 添加用户消息气泡（存储展示文本 + 附件路径）
     final userMsg = ClawChatMessage.user(
@@ -298,13 +304,15 @@ class HomeLogic extends GetxController {
           );
         }
 
-      case ClawAgentTokenUsageEvent(:final totalTokens):
+      case ClawAgentTokenUsageEvent(:final promptTokens, :final totalTokens):
         sessionTotalTokens.value += totalTokens;
+        _lastPromptTokens = promptTokens;
 
       case ClawAgentDoneEvent():
         isRunning.value = false;
         streamingMessageId = null;
         activeSkillName.value = null;
+        _checkAndTriggerCompression();
 
       case ClawAgentErrorEvent(:final message):
         _appendError(message);
@@ -319,6 +327,68 @@ class HomeLogic extends GetxController {
   }
 
   // ─── 私有辅助 ─────────────────────────────────────────────────────────────
+
+  /// 在每轮 Agent 完成后检查是否需要触发上下文压缩
+  void _checkAndTriggerCompression() {
+    final threshold =
+        AppConfigService.shared.config.value.model.compressionThreshold;
+    if (_lastPromptTokens >= threshold && !isCompressing.value) {
+      _triggerCompression();
+    }
+  }
+
+  /// 异步执行上下文压缩（后台运行，不阻塞 UI）
+  Future<void> _triggerCompression() async {
+    final sessionId = currentSessionId.value;
+    if (sessionId == null) return;
+    isCompressing.value = true;
+    try {
+      final allActive =
+          await DatabaseTool.shared.loadContextMessages(sessionId);
+
+      // 保留最近 15 条为热区，pin 第一条，其余归档
+      const hotWindowSize = 15;
+      if (allActive.length <= hotWindowSize + 2) return;
+
+      final toArchive = allActive
+          .skip(1) // 跳过 pin 住的第一条（用户初始任务描述）
+          .take(allActive.length - 1 - hotWindowSize)
+          .where((m) => m.type != ClawChatMessageType.summary) // 已有摘要不重复压缩
+          .toList();
+      if (toArchive.isEmpty) return;
+
+      // 获取第一条待归档消息的 sort_index，作为摘要插入位置
+      final insertSortIndex =
+          await DatabaseTool.shared.getSortIndex(toArchive.first.id) ?? 1;
+
+      final cfg = AppConfigService.shared.config.value.model;
+      final client = ClawLlmClient(
+        baseUrl: cfg.effectiveBaseUrl,
+        apiKey: cfg.apiKey,
+        modelId: cfg.modelId,
+        temperature: 0.3, // 摘要任务用较低温度，保证稳定性
+        maxTokens: 800,
+      );
+
+      final compressor = ContextCompressor(client: client);
+      await compressor.compress(
+        sessionId: sessionId,
+        toArchive: toArchive,
+        insertSortIndex: insertSortIndex,
+      );
+
+      // 压缩完成后重新加载消息列表刷新 UI
+      if (currentSessionId.value == sessionId) {
+        final reloaded = await DatabaseTool.shared.loadMessages(sessionId);
+        messages.assignAll(reloaded);
+        _scrollToBottom();
+      }
+    } catch (_) {
+      // 压缩失败不影响正常聊天，静默处理
+    } finally {
+      isCompressing.value = false;
+    }
+  }
 
   void _addBlock(String messageId, ClawChatBlockType blockType) {
     final idx = messages.indexWhere((m) => m.id == messageId);
@@ -487,6 +557,7 @@ class HomeLogic extends GetxController {
         MouseScrollTool(),
         KeyboardTypeTool(),
         KeyboardShortcutTool(),
+        RetrieveMessageTool(),
         ...getWebBrowserTools(_browserProfileDir()),
       ],
     );
