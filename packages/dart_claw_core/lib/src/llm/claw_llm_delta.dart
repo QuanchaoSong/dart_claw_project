@@ -29,3 +29,15 @@ class ClawLlmFinishDelta extends ClawLlmDelta {
   final String? reason; // 'stop' | 'tool_calls' | null
   const ClawLlmFinishDelta(this.reason);
 }
+
+/// 本次 LLM 调用的 token 用量（来自 API 响应的 usage 字段）
+class ClawLlmUsageDelta extends ClawLlmDelta {
+  final int promptTokens;
+  final int completionTokens;
+  final int totalTokens;
+  const ClawLlmUsageDelta({
+    required this.promptTokens,
+    required this.completionTokens,
+    required this.totalTokens,
+  });
+}

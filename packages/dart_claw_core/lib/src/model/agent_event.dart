@@ -118,6 +118,18 @@ class ClawAgentDoneEvent extends ClawAgentEvent {
   ClawAgentDoneEvent(this.summary);
 }
 
+/// 本轮 LLM 调用的 token 用量
+class ClawAgentTokenUsageEvent extends ClawAgentEvent {
+  final int promptTokens;
+  final int completionTokens;
+  final int totalTokens;
+  ClawAgentTokenUsageEvent({
+    required this.promptTokens,
+    required this.completionTokens,
+    required this.totalTokens,
+  });
+}
+
 /// 出现无法恢复的错误
 class ClawAgentErrorEvent extends ClawAgentEvent {
   final String message;

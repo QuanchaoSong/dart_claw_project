@@ -141,6 +141,12 @@ IMPORTANT RULES:
               for (final tc in toolCalls) {
                 yield ClawAgentToolEvent(tc);
               }
+            case ClawLlmUsageDelta(:final promptTokens, :final completionTokens, :final totalTokens):
+              yield ClawAgentTokenUsageEvent(
+                promptTokens: promptTokens,
+                completionTokens: completionTokens,
+                totalTokens: totalTokens,
+              );
             case ClawLlmFinishDelta():
               break;
           }

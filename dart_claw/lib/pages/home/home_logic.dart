@@ -11,7 +11,7 @@ import 'package:dart_claw/others/tool/database_tool.dart';
 import 'package:dart_claw/pages/home/dialog/password_dialog.dart';
 import 'package:dart_claw/pages/home/dialog/ask_user_dialog.dart';
 import 'package:dart_claw/pages/home/dialog/skill_failure_dialog.dart';
-import 'package:dart_claw/others/tools/mouse_keyboard_tools.dart';
+import 'package:dart_claw/others/dart_claw_core_extra_tools/mouse_keyboard_tools.dart';
 import 'package:dart_claw_core/dart_claw_core.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:get/get.dart';
@@ -140,6 +140,7 @@ class HomeLogic extends GetxController {
 
   /// Agent loop 是否正在运行（用于禁用输入框、显示 loading 状态）
   final isRunning = false.obs;
+  final sessionTotalTokens = 0.obs;
 
   /// 当前正在流式输出的 assistant 消息 id（null 表示无流式输出）
   String? streamingMessageId;
@@ -296,6 +297,9 @@ class HomeLogic extends GetxController {
             reason: reason,
           );
         }
+
+      case ClawAgentTokenUsageEvent(:final totalTokens):
+        sessionTotalTokens.value += totalTokens;
 
       case ClawAgentDoneEvent():
         isRunning.value = false;
@@ -531,6 +535,7 @@ class HomeLogic extends GetxController {
 
   Future<void> _loadSession(String sessionId) async {
     currentSessionId.value = sessionId;
+    sessionTotalTokens.value = 0;
     final msgs = await DatabaseTool.shared.loadMessages(sessionId);
     messages.assignAll(msgs);
     _scrollToBottom();
@@ -570,6 +575,7 @@ class HomeLogic extends GetxController {
   void newSession() {
     currentSessionId.value = null;
     messages.clear();
+    sessionTotalTokens.value = 0;
     allowAllTools.value = false;
     allowToolDeviation.value = true;
     activeSkillName.value = null;

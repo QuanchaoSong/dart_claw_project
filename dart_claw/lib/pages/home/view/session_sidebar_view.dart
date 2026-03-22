@@ -44,7 +44,7 @@ class SessionSidebarView extends StatelessWidget {
       child: Align(
         alignment: Alignment.centerLeft,
         child: Text(
-          '🦞 dart Claw',
+          '🦞 Dart Claw',
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,

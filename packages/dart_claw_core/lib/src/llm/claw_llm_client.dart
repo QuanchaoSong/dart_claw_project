@@ -47,6 +47,7 @@ class ClawLlmClient {
         'model': modelId,
         'messages': messages,
         'stream': true,
+        'stream_options': {'include_usage': true},
         'temperature': temperature,
         'max_tokens': maxTokens,
       };
@@ -103,6 +104,17 @@ class ClawLlmClient {
 
           try {
             final json = jsonDecode(data) as Map<String, dynamic>;
+
+            // usage chunk（stream_options: include_usage 时在 [DONE] 前发送）
+            final usage = json['usage'] as Map<String, dynamic>?;
+            if (usage != null) {
+              yield ClawLlmUsageDelta(
+                promptTokens: (usage['prompt_tokens'] as num?)?.toInt() ?? 0,
+                completionTokens: (usage['completion_tokens'] as num?)?.toInt() ?? 0,
+                totalTokens: (usage['total_tokens'] as num?)?.toInt() ?? 0,
+              );
+            }
+
             final choices = json['choices'] as List?;
             if (choices == null || choices.isEmpty) continue;
 

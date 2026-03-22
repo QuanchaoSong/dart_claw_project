@@ -59,7 +59,10 @@ class SessionInfoAndSettingsView extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _InfoItem(label: 'Model', value: logic.currentModelId),
-                      const _InfoItem(label: 'Tokens', value: '—'),
+                      _InfoItem(
+                        label: 'Tokens',
+                        value: _formatTokens(logic.sessionTotalTokens.value),
+                      ),
                       _InfoItem(
                         label: 'Status',
                         value: logic.isRunning.value ? 'Thinking…' : 'Ready',
@@ -207,6 +210,13 @@ class SessionInfoAndSettingsView extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 // 私有辅助 Widget
 // ─────────────────────────────────────────────────────────────────────────────
+
+String _formatTokens(int n) {
+  if (n == 0) return '—';
+  if (n < 1000) return '$n';
+  if (n < 10000) return '${(n / 1000).toStringAsFixed(1)}k';
+  return '${(n / 1000).round()}k';
+}
 
 class _InfoItem extends StatelessWidget {
   const _InfoItem({required this.label, required this.value});
