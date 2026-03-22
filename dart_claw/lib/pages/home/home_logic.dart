@@ -11,6 +11,7 @@ import 'package:dart_claw/others/tool/database_tool.dart';
 import 'package:dart_claw/pages/home/dialog/password_dialog.dart';
 import 'package:dart_claw/pages/home/dialog/ask_user_dialog.dart';
 import 'package:dart_claw/pages/home/dialog/skill_failure_dialog.dart';
+import 'package:dart_claw/others/tools/mouse_keyboard_tools.dart';
 import 'package:dart_claw_core/dart_claw_core.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:get/get.dart';
@@ -475,6 +476,13 @@ class HomeLogic extends GetxController {
         VisionReadImageTool(),
         ShowChartTool(),
         ShowVideoTool(),
+        ScreenshotTool(),
+        MouseMoveTool(),
+        MouseClickTool(),
+        MouseDragTool(),
+        MouseScrollTool(),
+        KeyboardTypeTool(),
+        KeyboardShortcutTool(),
         ...getWebBrowserTools(_browserProfileDir()),
       ],
     );

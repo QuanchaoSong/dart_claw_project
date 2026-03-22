@@ -20,6 +20,7 @@ export 'src/tools/show_chart_tool.dart';
 export 'src/tools/show_video_tool.dart';
 export 'src/tools/interactive_run_command_tool.dart';
 export 'src/tools/ask_user_tool.dart';
+export 'src/tools/screenshot_tool.dart';
 export 'src/tools/web_browser/web_browser_launcher.dart';
 export 'src/tools/web_browser/cdp_client.dart';
 export 'src/tools/web_browser/web_browser_tool.dart';

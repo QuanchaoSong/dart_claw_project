@@ -1,0 +1,18 @@
+name: dart_claw_mouse_auto
+description: "macOS mouse automation via Dart FFI + CoreGraphics."
+version: 0.0.1
+publish_to: 'none'
+
+environment:
+  sdk: ^3.10.8
+  flutter: ">=1.17.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  ffi: ^2.1.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0

@@ -96,6 +96,13 @@ packages:
       relative: true
     source: path
     version: "0.0.1"
+  dart_claw_mouse_auto:
+    dependency: "direct main"
+    description:
+      path: "../packages/dart_claw_mouse_auto"
+      relative: true
+    source: path
+    version: "0.0.1"
   dbus:
     dependency: transitive
     description:
