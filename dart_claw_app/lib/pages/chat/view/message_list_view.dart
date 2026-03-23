@@ -3,10 +3,10 @@ import 'package:get/get.dart';
 
 import '../../../others/model/remote_message_info.dart';
 import '../chat_logic.dart';
-import 'assistant_bubble_view.dart';
-import 'confirm_card_view.dart';
-import 'log_line_view.dart';
-import 'tool_card_view.dart';
+import 'claw_chat_item_cell.dart';
+import 'claw_chat_item_subviews/confirm_card_view.dart';
+import 'claw_chat_item_subviews/log_line_view.dart';
+import 'claw_chat_item_subviews/tool_card_view.dart';
 import 'user_bubble_view.dart';
 
 class MessageListView extends StatelessWidget {

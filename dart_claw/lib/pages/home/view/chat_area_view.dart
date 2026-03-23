@@ -2,7 +2,7 @@ import 'package:dart_claw/others/constants/color_constants.dart';
 import 'package:dart_claw/pages/home/home_logic.dart';
 import 'package:dart_claw/pages/home/view/claw_chat_item_cell.dart';
 import 'package:dart_claw/pages/home/view/claw_chat_item_subviews/inline_user_input_card_view.dart';
-import 'package:dart_claw/pages/home/view/log_line_view.dart';
+import 'package:dart_claw/pages/home/view/claw_chat_item_subviews/log_line_view.dart';
 import 'package:dart_claw/pages/home/view/user_chat_item_cell.dart';
 import 'package:dart_claw_core/dart_claw_core.dart';
 import 'package:flutter/material.dart';

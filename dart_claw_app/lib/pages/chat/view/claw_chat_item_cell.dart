@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../../others/model/remote_message_info.dart';
-import 'content_bubble_view.dart';
+import 'claw_chat_item_subviews/content_bubble_view.dart';
+import 'claw_chat_item_subviews/reasoning_block_view.dart';
 import 'loading_dots.dart';
-import 'reasoning_block_view.dart';
 
 class AssistantBubbleView extends StatefulWidget {
   const AssistantBubbleView({super.key, required this.msg});

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../others/constants/color_constants.dart';
+import '../../../../others/constants/color_constants.dart';
 
 class ReasoningBlockView extends StatefulWidget {
   const ReasoningBlockView({

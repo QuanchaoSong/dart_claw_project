@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:media_kit/media_kit.dart';
 import 'others/constants/color_constants.dart';
 import 'others/tool/database_tool.dart';
 import 'pages/connection/connection_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  MediaKit.ensureInitialized();
   await DatabaseTool().init();
   runApp(const MyApp());
 }

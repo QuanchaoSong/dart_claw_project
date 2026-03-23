@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../others/model/remote_message_info.dart';
+import '../../../../others/model/remote_message_info.dart';
 
 class LogLineView extends StatelessWidget {
   const LogLineView({super.key, required this.msg});

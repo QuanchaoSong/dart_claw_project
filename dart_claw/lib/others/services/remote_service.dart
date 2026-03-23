@@ -16,6 +16,7 @@ class RemoteService {
   static const Duration _pingInterval = Duration(seconds: 15);
 
   static const _imageExtensions = {'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'};
+  static const _videoExtensions = {'mp4', 'mov', 'avi', 'mkv', 'webm', 'm4v'};
 
   HttpServer? _server;
   final _clients = <WebSocket>{};
@@ -55,6 +56,14 @@ class RemoteService {
     return 'http://$ip:$defaultPort/image?path=${Uri.encodeComponent(path)}';
   }
 
+  /// 将桌面本地视频路径转为手机可访问的 HTTP URL。
+  /// 网络 URL 原样返回。
+  String videoUrl(String path) {
+    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+    final ip = _localIp ?? '127.0.0.1';
+    return 'http://$ip:$defaultPort/video?path=${Uri.encodeComponent(path)}';
+  }
+
   Future<void> stop() async {
     _pingTimer?.cancel();
     _pingTimer = null;
@@ -73,6 +82,11 @@ class RemoteService {
     // ── 图片服务 (/image?path=...) ─────────────────────────────────────────
     if (request.uri.path == '/image') {
       await _serveImage(request);
+      return;
+    }
+    // ── 视频服务 (/video?path=...) ─────────────────────────────────────────
+    if (request.uri.path == '/video') {
+      await _serveVideo(request);
       return;
     }
     // ── WebSocket 升级 ────────────────────────────────────────────────────
@@ -115,6 +129,45 @@ class RemoteService {
       'gif' => 'image/gif',
       'webp' => 'image/webp',
       'bmp' => 'image/bmp',
+      _ => 'application/octet-stream',
+    };
+    final bytes = await file.readAsBytes();
+    request.response
+      ..headers.set('Content-Type', mime)
+      ..headers.set('Access-Control-Allow-Origin', '*')
+      ..add(bytes);
+    await request.response.close();
+  }
+
+  Future<void> _serveVideo(HttpRequest request) async {
+    final path = request.uri.queryParameters['path'] ?? '';
+    if (path.isEmpty) {
+      request.response
+        ..statusCode = HttpStatus.badRequest
+        ..close();
+      return;
+    }
+    final ext = path.split('.').last.toLowerCase();
+    if (!_videoExtensions.contains(ext)) {
+      request.response
+        ..statusCode = HttpStatus.forbidden
+        ..close();
+      return;
+    }
+    final file = File(path);
+    if (!await file.exists()) {
+      request.response
+        ..statusCode = HttpStatus.notFound
+        ..close();
+      return;
+    }
+    final mime = switch (ext) {
+      'mp4' => 'video/mp4',
+      'mov' => 'video/quicktime',
+      'avi' => 'video/x-msvideo',
+      'mkv' => 'video/x-matroska',
+      'webm' => 'video/webm',
+      'm4v' => 'video/x-m4v',
       _ => 'application/octet-stream',
     };
     final bytes = await file.readAsBytes();

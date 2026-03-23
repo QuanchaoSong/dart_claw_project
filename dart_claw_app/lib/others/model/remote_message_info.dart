@@ -23,6 +23,9 @@ class RemoteMessageInfo {
   /// show_image 工具的图片 URL 列表（已由桌面端转换为手机可访问的地址）
   List<String> imagePaths = [];
 
+  /// show_video 工具的视频 URL（已由桌面端转换为手机可访问的地址）
+  String? videoUrl;
+
   /// 确认请求 ID（confirm 类型专用）
   String? confirmId;
 
@@ -39,6 +42,7 @@ class RemoteMessageInfo {
     this.confirmId,
     this.isStreaming = false,
     List<String>? imagePaths,
+    this.videoUrl,
   }) : imagePaths = imagePaths ?? [];
 
   static String _newId() {
@@ -69,6 +73,11 @@ class RemoteMessageInfo {
       final p = args['paths'];
       if (p is List) paths.addAll(p.cast<String>());
     }
+    String? videoUrl;
+    if (toolName == 'show_video' && args != null) {
+      final p = args['path'];
+      if (p is String && p.isNotEmpty) videoUrl = p;
+    }
     return RemoteMessageInfo._(
       id: _newId(),
       type: RemoteMessageInfoType.tool,
@@ -77,6 +86,7 @@ class RemoteMessageInfo {
       toolStatus: toolStatus,
       content: _argsPreview(args),
       imagePaths: paths.isEmpty ? null : paths,
+      videoUrl: videoUrl,
     );
   }
 

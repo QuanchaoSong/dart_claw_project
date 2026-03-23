@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../others/model/remote_message_info.dart';
+import '../../../../others/model/remote_message_info.dart';
+import 'video_card_view.dart';
 
 class ToolCardView extends StatelessWidget {
   const ToolCardView({super.key, required this.msg});
@@ -21,19 +22,25 @@ class ToolCardView extends StatelessWidget {
         msg.toolStatus == 'success' &&
         msg.imagePaths.isNotEmpty;
 
+    final showVideo = msg.toolName == 'show_video' &&
+        msg.toolStatus == 'success' &&
+        msg.videoUrl != null;
+
+    final hasSubview = showImages || showVideo;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
         // ── 工具状态行 ──────────────────────────────────
         Container(
-          margin: EdgeInsets.only(bottom: showImages ? 0 : 8),
+          margin: EdgeInsets.only(bottom: hasSubview ? 0 : 8),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
             color: Colors.white.withOpacity(0.04),
             borderRadius: BorderRadius.vertical(
               top: const Radius.circular(10),
-              bottom: showImages ? Radius.zero : const Radius.circular(10),
+              bottom: hasSubview ? Radius.zero : const Radius.circular(10),
             ),
             border: Border.all(color: Colors.white.withOpacity(0.07)),
           ),
@@ -83,8 +90,22 @@ class ToolCardView extends StatelessWidget {
         child: msg.imagePaths.length == 1
                 ? _RemoteImage(url: msg.imagePaths.first)
                 : _ImageCarousel(paths: msg.imagePaths),
-          ),
-      ],
+          ),        // ── 视频播放卡片（仅 show_video 成功时）───────────────────────
+        if (showVideo)
+          Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            decoration: BoxDecoration(
+              color: Colors.black,
+              borderRadius: const BorderRadius.vertical(
+                  bottom: Radius.circular(10)),
+              border: Border(
+                left: BorderSide(color: Colors.white.withOpacity(0.07)),
+                right: BorderSide(color: Colors.white.withOpacity(0.07)),
+                bottom: BorderSide(color: Colors.white.withOpacity(0.07)),
+              ),
+            ),
+            child: VideoCardView(url: msg.videoUrl!),
+          ),      ],
     );
   }
 }

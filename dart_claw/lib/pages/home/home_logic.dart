@@ -262,12 +262,19 @@ class HomeLogic extends GetxController {
   /// show_image 工具广播时，将本地路径替换为手机可访问的 HTTP URL。
   /// 其他工具原样返回 args。
   Map<String, dynamic> _remoteArgs(ClawToolCallRecord record) {
-    if (record.name != 'show_image') return record.args;
-    final paths = record.args['paths'];
-    if (paths is! List || paths.isEmpty) return record.args;
-    final transformed =
-        paths.map((p) => RemoteService().imageUrl(p.toString())).toList();
-    return {...record.args, 'paths': transformed};
+    if (record.name == 'show_image') {
+      final paths = record.args['paths'];
+      if (paths is! List || paths.isEmpty) return record.args;
+      final transformed =
+          paths.map((p) => RemoteService().imageUrl(p.toString())).toList();
+      return {...record.args, 'paths': transformed};
+    }
+    if (record.name == 'show_video') {
+      final path = record.args['path'];
+      if (path is! String || path.isEmpty) return record.args;
+      return {...record.args, 'path': RemoteService().videoUrl(path)};
+    }
+    return record.args;
   }
 
   /// 处理来自 ClawAgentRunner 的事件（阶段二实现，目前为 stub）

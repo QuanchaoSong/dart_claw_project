@@ -110,6 +110,11 @@ class ChatLogic extends GetxController {
             messages[idx].imagePaths = p.cast<String>().toList();
           }
         }
+        // show_video: 成功时更新视频 URL（URL 已由桌面端转换完毕）
+        if (name == 'show_video' && args != null) {
+          final p = args['path'];
+          if (p is String && p.isNotEmpty) messages[idx].videoUrl = p;
+        }
         messages.refresh();
         return;
       }
