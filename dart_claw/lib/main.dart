@@ -1,5 +1,6 @@
 import 'package:dart_claw/others/constants/color_constants.dart';
 import 'package:dart_claw/others/services/app_config_service.dart';
+import 'package:dart_claw/others/services/remote_service.dart';
 import 'package:dart_claw/others/services/scheduler_service.dart';
 import 'package:dart_claw/others/tool/database_tool.dart';
 import 'package:dart_claw/pages/home/home_page.dart';
@@ -14,6 +15,7 @@ void main() async {
   await Get.putAsync(() => AppConfigService().init());
   await DatabaseTool.shared.init();
   await SchedulerService.instance.init();
+  await RemoteService().start();
   
   runApp(const MyApp());
 }

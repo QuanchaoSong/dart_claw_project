@@ -1,3 +1,7 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:get/get.dart';
 
 /// 单例：管理与桌面端（dart_claw）的 WebSocket 连接状态。
@@ -9,22 +13,66 @@ class ConnectionService {
 
   final isConnected = false.obs;
   final serverHost = ''.obs;
-  final serverPort = 7788.obs;
+  final serverPort = 37788.obs;
+
+  WebSocket? _socket;
+
+  final _msgController =
+      StreamController<Map<String, dynamic>>.broadcast();
+
+  /// 桌面端推送的消息流（ping/pong 心跳不在其中）。
+  Stream<Map<String, dynamic>> get incomingMessages => _msgController.stream;
 
   String get serverUrl => 'ws://${serverHost.value}:${serverPort.value}';
 
-  /// 尝试连接，成功返回 true。
-  /// WebSocket 逻辑将在后续实现。
+  /// 建立 WebSocket 连接，成功返回 true。
   Future<bool> connect({required String host, required int port}) async {
     serverHost.value = host;
     serverPort.value = port;
-    // TODO: establish WebSocket connection
-    isConnected.value = true;
-    return true;
+    try {
+      _socket = await WebSocket.connect('ws://$host:$port')
+          .timeout(const Duration(seconds: 5));
+      isConnected.value = true;
+      _socket!.listen(
+        _handleMessage,
+        onDone: _onDisconnected,
+        onError: (_) => _onDisconnected(),
+        cancelOnError: true,
+      );
+      return true;
+    } catch (e) {
+      _socket = null;
+      isConnected.value = false;
+      return false;
+    }
+  }
+
+  void _handleMessage(dynamic data) {
+    try {
+      final msg = jsonDecode(data as String) as Map<String, dynamic>;
+      if (msg['type'] == 'ping') {
+        print('[ConnectionService] ♡ ping → pong');
+        _socket?.add(jsonEncode({'type': 'pong'}));
+        return; // 心跳不转发给监听者
+      }
+      _msgController.add(msg);
+    } catch (_) {}
+  }
+
+  void _onDisconnected() {
+    _socket = null;
+    isConnected.value = false;
   }
 
   void disconnect() {
-    // TODO: close WebSocket
+    _socket?.close();
+    _socket = null;
     isConnected.value = false;
   }
+
+  /// 向桌面端发送一条消息。
+  void send(Map<String, dynamic> msg) {
+    _socket?.add(jsonEncode(msg));
+  }
 }
+

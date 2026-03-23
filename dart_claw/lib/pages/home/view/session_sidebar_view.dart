@@ -284,6 +284,12 @@ class _SessionItem extends StatelessWidget {
                       shape: BoxShape.circle,
                     ),
                   ),
+                if (session.source == 'remote')
+                  const Padding(
+                    padding: EdgeInsets.only(left: 4),
+                    child: Icon(Icons.phone_iphone_rounded,
+                        size: 11, color: Colors.tealAccent),
+                  ),
               ],
             ),
           ),

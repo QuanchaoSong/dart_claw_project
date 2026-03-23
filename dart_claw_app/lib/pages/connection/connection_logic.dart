@@ -4,8 +4,8 @@ import '../../others/services/connection_service.dart';
 import '../chat/chat_page.dart';
 
 class ConnectionLogic extends GetxController {
-  final hostController = TextEditingController();
-  final portController = TextEditingController(text: '7788');
+  final hostController = TextEditingController(text: '127.0.0.1');
+  final portController = TextEditingController(text: '37788');
 
   final isConnecting = false.obs;
   final errorMessage = RxnString();

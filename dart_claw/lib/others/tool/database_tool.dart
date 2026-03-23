@@ -16,7 +16,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 /// 使用前必须调用 [init]（在 main() 或首次使用前）。
 class DatabaseTool {
   static const _dbFileName = 'dart_claw.db';
-  static const _dbVersion = 5;
+  static const _dbVersion = 6;
 
   Database? _db;
 
@@ -65,7 +65,8 @@ class DatabaseTool {
         id         TEXT PRIMARY KEY,
         title      TEXT NOT NULL,
         created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL
+        updated_at INTEGER NOT NULL,
+        source     TEXT NOT NULL DEFAULT 'local'
       )
     ''');
 

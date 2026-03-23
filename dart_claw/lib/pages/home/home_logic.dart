@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:dart_claw/others/constants/color_constants.dart';
 import 'package:dart_claw/others/services/app_config_service.dart';
+import 'package:dart_claw/others/services/remote_service.dart';
 import 'package:dart_claw/others/tool/snackbar_tool.dart';
 import 'package:dart_claw/others/model/claw_session_info.dart';
 import 'package:dart_claw/others/tool/database_tool.dart';
@@ -178,7 +178,8 @@ class HomeLogic extends GetxController {
   // ─── 发送消息 ─────────────────────────────────────────────────────────────
 
   /// 用户发送一条消息（由 UI 层调用）
-  void sendMessage(String content, {List<String> attachedPaths = const []}) {
+  void sendMessage(String content,
+      {List<String> attachedPaths = const [], bool isRemote = false}) {
     if (content.trim().isEmpty && attachedPaths.isEmpty) return;
     if (isRunning.value) return;
 
@@ -205,7 +206,7 @@ class HomeLogic extends GetxController {
     final skillName = pendingSkillName.value;
     pendingSkillName.value = null;
     _runAgent(content.trim(), attachedPaths, assistantMsg.id, history, userMsg,
-        explicitSkillName: skillName);
+        explicitSkillName: skillName, isRemote: isRemote);
   }
 
   static const _imageExtensions = {'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'};
@@ -250,18 +251,27 @@ class HomeLogic extends GetxController {
       case ClawAgentMessageChunkEvent(:final messageId, :final chunk):
         _appendChunk(messageId, chunk);
         _scrollToBottom();
+        RemoteService().broadcast({'type': 'chunk', 'content': chunk});
 
       case ClawAgentReasoningChunkEvent(:final messageId, :final chunk):
         _appendReasoningChunk(messageId, chunk);
         _scrollToBottom();
+        RemoteService().broadcast({'type': 'reasoning_chunk', 'content': chunk});
 
       case ClawAgentMessageDoneEvent(:final messageId, :final toolCalls):
         _finalizeMessage(messageId, toolCalls: toolCalls);
 
       case ClawAgentToolEvent(:final record):
         _upsertToolRecord(record);
+        RemoteService().broadcast({
+          'type': 'tool',
+          'id': record.id,
+          'name': record.name,
+          'args': record.args,
+          'status': record.status.name,
+        });
 
-      case ClawAgentConfirmRequestEvent(:final requestId):
+      case ClawAgentConfirmRequestEvent(:final requestId, :final message):
         if (allowAllTools.value) {
           // Session 级别「全部放行」开启时，自动确认无需用户介入
           _activeRunner?.confirm(requestId, allow: true);
@@ -269,6 +279,11 @@ class HomeLogic extends GetxController {
           // 工具 block 已通过 ClawAgentToolEvent 更新为 awaitingConfirmation
           // UI 会自动显示内嵌确认卡片
           _scrollToBottom();
+          RemoteService().broadcast({
+            'type': 'confirm_request',
+            'id': requestId,
+            'message': message,
+          });
         }
         break;
 
@@ -303,6 +318,10 @@ class HomeLogic extends GetxController {
             reason: reason,
           );
         }
+        RemoteService().broadcast({
+          'type': 'error',
+          'message': 'Skill "$skillName" 失败于「$stepTitle」',
+        });
 
       case ClawAgentTokenUsageEvent(:final promptTokens, :final totalTokens):
         sessionTotalTokens.value += totalTokens;
@@ -313,15 +332,18 @@ class HomeLogic extends GetxController {
         streamingMessageId = null;
         activeSkillName.value = null;
         _checkAndTriggerCompression();
+        RemoteService().broadcast({'type': 'done'});
 
       case ClawAgentErrorEvent(:final message):
         _appendError(message);
         isRunning.value = false;
         streamingMessageId = null;
         activeSkillName.value = null;
+        RemoteService().broadcast({'type': 'error', 'message': message});
 
-      case ClawAgentLogEvent():
+      case ClawAgentLogEvent(:final content):
         // 普通日志暂不展示在消息列表，后续可加到 Info 面板
+        RemoteService().broadcast({'type': 'log', 'content': content});
         break;
     }
   }
@@ -523,9 +545,10 @@ class HomeLogic extends GetxController {
     List<ClawChatMessage> history,
     ClawChatMessage userMsg, {
     String? explicitSkillName,
+    bool isRemote = false,
   }) async {
     // ── 确保 session 存在，再持久化用户消息 ──
-    await _ensureSession(firstUserMessage: rawText);
+    await _ensureSession(firstUserMessage: rawText, isRemote: isRemote);
     final apiContent = _buildApiContent(rawText, attachedPaths);
     await _persistMessage(userMsg, messages.indexOf(userMsg));
 
@@ -613,7 +636,8 @@ class HomeLogic extends GetxController {
   }
 
   /// 若当前不存在 session，自动创建一个（懒创建）
-  Future<void> _ensureSession({required String firstUserMessage}) async {
+  Future<void> _ensureSession(
+      {required String firstUserMessage, bool isRemote = false}) async {
     if (currentSessionId.value != null) return;
     final title = firstUserMessage.length > 50
         ? '${firstUserMessage.substring(0, 50)}…'
@@ -623,6 +647,7 @@ class HomeLogic extends GetxController {
       title: title,
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
+      source: isRemote ? 'remote' : 'local',
     );
     await DatabaseTool.shared.insertSession(session);
     sessions.insert(0, session);
