@@ -18,7 +18,7 @@ class SessionsDrawerView extends StatelessWidget {
             const Divider(color: Colors.white12, height: 1),
             _buildNewChatButton(context),
             const Divider(color: Colors.white12, height: 1),
-            Expanded(child: _buildSessionList()),
+            Expanded(child: _buildSessionList(context)),
           ],
         ),
       ),
@@ -84,21 +84,58 @@ class SessionsDrawerView extends StatelessWidget {
 
   // ── Session list ──────────────────────────────────────────────────────────
 
-  Widget _buildSessionList() {
-    // TODO: replace with Obx + real session list from WebSocket / local cache
-    return const Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.chat_bubble_outline, color: Colors.white12, size: 36),
-          SizedBox(height: 12),
-          Text(
-            '暂无会话',
-            style: TextStyle(color: Colors.white24, fontSize: 13),
+  Widget _buildSessionList(BuildContext context) {
+    final logic = Get.find<ChatLogic>();
+    return Obx(() {
+      final sessions = logic.sessions;
+      if (sessions.isEmpty) {
+        return const Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.chat_bubble_outline, color: Colors.white12, size: 36),
+              SizedBox(height: 12),
+              Text(
+                '暂无会话',
+                style: TextStyle(color: Colors.white24, fontSize: 13),
+              ),
+            ],
           ),
-        ],
-      ),
-    );
+        );
+      }
+      return ListView.builder(
+        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+        itemCount: sessions.length,
+        itemBuilder: (ctx, i) {
+          final session = sessions[i];
+          return Dismissible(
+            key: ValueKey(session.id),
+            direction: DismissDirection.endToStart,
+            background: Container(
+              alignment: Alignment.centerRight,
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              margin: const EdgeInsets.symmetric(vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.red.shade800,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.delete_outline,
+                  color: Colors.white, size: 20),
+            ),
+            onDismissed: (_) => logic.deleteSession(session),
+            child: SessionListItem(
+              title: session.title,
+              updatedAt: session.updatedAt,
+              isActive: false,
+              onTap: () {
+                Navigator.of(context).pop();
+                logic.switchToSession(session);
+              },
+            ),
+          );
+        },
+      );
+    });
   }
 }
 

@@ -295,7 +295,7 @@ class DatabaseTool {
   Future<List<ClawChatMessage>> loadContextMessages(String sessionId) async {
     final rows = await _database.query(
       'messages',
-      where: "session_id = ? AND is_archived = 0 AND type != 'divider'",
+      where: "session_id = ? AND is_archived = 0 AND type != 'divider' AND type != 'log'",
       whereArgs: [sessionId],
       orderBy: 'sort_index ASC',
     );

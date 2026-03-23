@@ -1,54 +1,73 @@
 import 'package:flutter/material.dart';
 
-import '../../../others/constants/color_constants.dart';
 import '../../../others/model/remote_message_info.dart';
+import 'content_bubble_view.dart';
+import 'loading_dots.dart';
+import 'reasoning_block_view.dart';
 
-class AssistantBubbleView extends StatelessWidget {
+class AssistantBubbleView extends StatefulWidget {
   const AssistantBubbleView({super.key, required this.msg});
   final RemoteMessageInfo msg;
 
   @override
+  State<AssistantBubbleView> createState() => _AssistantBubbleViewState();
+}
+
+class _AssistantBubbleViewState extends State<AssistantBubbleView> {
+  bool _reasoningExpanded = true;
+  bool _prevIsStreaming = true;
+
+  @override
+  void didUpdateWidget(AssistantBubbleView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final isStreaming = widget.msg.isStreaming;
+    // 流式输出结束时自动收起推理块（与桌面端行为一致）
+    if (_prevIsStreaming && !isStreaming && widget.msg.reasoning.isNotEmpty) {
+      setState(() => _reasoningExpanded = false);
+    }
+    _prevIsStreaming = isStreaming;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final showCursor = msg.isStreaming;
-    final text = showCursor && msg.content.isEmpty
-        ? null
-        : '${msg.content}${showCursor ? '▍' : ''}';
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        constraints: BoxConstraints(
-            maxWidth: MediaQuery.of(context).size.width * 0.82),
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: AppColors.bgMid,
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(4),
-            topRight: Radius.circular(16),
-            bottomLeft: Radius.circular(16),
-            bottomRight: Radius.circular(16),
-          ),
-          border: Border.all(color: Colors.white.withOpacity(0.08)),
-        ),
-        child: text == null
-            ? const LoadingDotsView()
-            : SelectionArea(
-                child: Text(text,
-                    style: const TextStyle(
-                        color: Colors.white, fontSize: 14, height: 1.5))),
+    final msg = widget.msg;
+    final hasReasoning = msg.reasoning.isNotEmpty;
+    final hasContent = msg.content.isNotEmpty;
+    final isStreaming = msg.isStreaming;
+
+    // 尚未收到任何内容：显示跳动加载点
+    if (!hasReasoning && !hasContent && isStreaming) {
+      return const Padding(
+        padding: EdgeInsets.only(bottom: 12),
+        child: LoadingDots(),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (hasReasoning)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: ReasoningBlockView(
+                reasoning: msg.reasoning,
+                // 推理阶段：仍在流式输出且正文还未到达
+                isStreaming: isStreaming && !hasContent,
+                isExpanded: _reasoningExpanded,
+                onToggle: () =>
+                    setState(() => _reasoningExpanded = !_reasoningExpanded),
+              ),
+            ),
+          if (hasContent || (isStreaming && hasReasoning))
+            ContentBubbleView(
+              content: msg.content,
+              isStreaming: isStreaming,
+            ),
+        ],
       ),
     );
   }
 }
 
-class LoadingDotsView extends StatelessWidget {
-  const LoadingDotsView({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const SizedBox(
-      height: 20,
-      child: Text('…', style: TextStyle(color: Colors.white38, fontSize: 20)),
-    );
-  }
-}

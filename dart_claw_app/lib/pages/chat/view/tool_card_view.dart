@@ -16,43 +16,241 @@ class ToolCardView extends StatelessWidget {
       'awaitingConfirmation' => (Icons.help_outline, Colors.orangeAccent),
       _ => (Icons.settings_outlined, Colors.white38),
     };
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.04),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white.withOpacity(0.07)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          isActive
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 1.5,
-                    valueColor: AlwaysStoppedAnimation(Colors.white38),
-                  ))
-              : Icon(icon, size: 16, color: iconColor),
-          const SizedBox(width: 8),
-          Text(msg.toolName ?? '',
-              style: const TextStyle(
-                  color: Colors.white60,
-                  fontSize: 12,
-                  fontFamily: 'monospace')),
-          if (msg.content.isNotEmpty) ...[
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(msg.content,
-                  style: const TextStyle(
-                      color: Colors.white38, fontSize: 11),
-                  overflow: TextOverflow.ellipsis),
+
+    final showImages = msg.toolName == 'show_image' &&
+        msg.toolStatus == 'success' &&
+        msg.imagePaths.isNotEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // ── 工具状态行 ──────────────────────────────────
+        Container(
+          margin: EdgeInsets.only(bottom: showImages ? 0 : 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.04),
+            borderRadius: BorderRadius.vertical(
+              top: const Radius.circular(10),
+              bottom: showImages ? Radius.zero : const Radius.circular(10),
             ),
-          ],
-        ],
+            border: Border.all(color: Colors.white.withOpacity(0.07)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              isActive
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 1.5,
+                        valueColor: AlwaysStoppedAnimation(Colors.white38),
+                      ))
+                  : Icon(icon, size: 16, color: iconColor),
+              const SizedBox(width: 8),
+              Text(msg.toolName ?? '',
+                  style: const TextStyle(
+                      color: Colors.white60,
+                      fontSize: 12,
+                      fontFamily: 'monospace')),
+              if (msg.content.isNotEmpty) ...[
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(msg.content,
+                      style: const TextStyle(color: Colors.white38, fontSize: 11),
+                      overflow: TextOverflow.ellipsis),
+                ),
+              ],
+            ],
+          ),
+        ),
+        // ── 图片轮播（仅 show_image 成功时）────────────
+        if (showImages)
+          Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.04),
+              borderRadius: const BorderRadius.vertical(
+                  bottom: Radius.circular(10)),
+              border: Border(
+                left: BorderSide(color: Colors.white.withOpacity(0.07)),
+                right: BorderSide(color: Colors.white.withOpacity(0.07)),
+                bottom: BorderSide(color: Colors.white.withOpacity(0.07)),
+              ),
+            ),
+        child: msg.imagePaths.length == 1
+                ? _RemoteImage(url: msg.imagePaths.first)
+                : _ImageCarousel(paths: msg.imagePaths),
+          ),
+      ],
+    );
+  }
+}
+
+// ── 单张图片 ──────────────────────────────────────────────────────────────────
+
+class _RemoteImage extends StatelessWidget {
+  const _RemoteImage({required this.url});
+  final String url;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(bottom: Radius.circular(10)),
+      child: Image.network(
+        url,
+        fit: BoxFit.contain,
+        loadingBuilder: (_, child, progress) => progress == null
+            ? child
+            : const SizedBox(
+                height: 120,
+                child: Center(
+                    child: CircularProgressIndicator(strokeWidth: 1.5))),
+        errorBuilder: (_, __, ___) => const Padding(
+          padding: EdgeInsets.all(12),
+          child: Text('图片加载失败',
+              style: TextStyle(color: Colors.red, fontSize: 12)),
+        ),
       ),
     );
   }
 }
+
+// ── 多图轮播 ──────────────────────────────────────────────────────────────────
+
+class _ImageCarousel extends StatefulWidget {
+  const _ImageCarousel({required this.paths});
+  final List<String> paths;
+  @override
+  State<_ImageCarousel> createState() => _ImageCarouselState();
+}
+
+class _ImageCarouselState extends State<_ImageCarousel> {
+  late final PageController _ctrl = PageController();
+  int _current = 0;
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final total = widget.paths.length;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: 260,
+          child: Stack(
+            children: [
+              PageView.builder(
+                controller: _ctrl,
+                itemCount: total,
+                onPageChanged: (i) => setState(() => _current = i),
+                itemBuilder: (_, i) => ClipRRect(
+                  borderRadius: i == total - 1
+                      ? const BorderRadius.vertical(
+                          bottom: Radius.circular(10))
+                      : BorderRadius.zero,
+                  child: Image.network(
+                    widget.paths[i],
+                    fit: BoxFit.contain,
+                    loadingBuilder: (_, child, progress) => progress == null
+                        ? child
+                        : const Center(
+                            child: CircularProgressIndicator(
+                                strokeWidth: 1.5)),
+                    errorBuilder: (_, __, ___) => const Center(
+                      child: Text('加载失败',
+                          style:
+                              TextStyle(color: Colors.red, fontSize: 12)),
+                    ),
+                  ),
+                ),
+              ),
+              // 左右切换箭头
+              if (_current > 0)
+                Positioned(
+                  left: 6,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(child: _Arrow(left: true, onTap: () {
+                    _ctrl.previousPage(
+                        duration: const Duration(milliseconds: 200),
+                        curve: Curves.easeOut);
+                  })),
+                ),
+              if (_current < total - 1)
+                Positioned(
+                  right: 6,
+                  top: 0,
+                  bottom: 0,
+                  child: Center(child: _Arrow(left: false, onTap: () {
+                    _ctrl.nextPage(
+                        duration: const Duration(milliseconds: 200),
+                        curve: Curves.easeOut);
+                  })),
+                ),
+            ],
+          ),
+        ),
+        // 指示点 + 计数
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (var i = 0; i < total; i++)
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  width: i == _current ? 16 : 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: i == _current
+                        ? Colors.white
+                        : Colors.white30,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+              const SizedBox(width: 10),
+              Text('${_current + 1} / $total',
+                  style:
+                      const TextStyle(color: Colors.white38, fontSize: 11)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _Arrow extends StatelessWidget {
+  const _Arrow({required this.left, required this.onTap});
+  final bool left;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: Colors.black54,
+          shape: BoxShape.circle,
+        ),
+        child: Icon(
+          left ? Icons.chevron_left : Icons.chevron_right,
+          color: Colors.white,
+          size: 20,
+        ),
+      ),
+    );
+  }
+}
+

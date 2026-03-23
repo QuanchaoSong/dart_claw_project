@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'others/constants/color_constants.dart';
+import 'others/tool/database_tool.dart';
 import 'pages/connection/connection_page.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await DatabaseTool().init();
   runApp(const MyApp());
 }
 

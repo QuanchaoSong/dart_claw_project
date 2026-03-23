@@ -8,6 +8,9 @@ class RemoteMessageInfo {
   /// 主文本：assistant 为流式输出，confirm 为提示文本，log 为日志
   String content;
 
+  /// 推理过程文本（reasoning_chunk 累积，assistant 类型专用）
+  String reasoning = '';
+
   /// 工具名（tool 类型专用）
   String? toolName;
 
@@ -16,6 +19,9 @@ class RemoteMessageInfo {
 
   /// 工具状态：pending / running / success / error / awaitingConfirmation
   String toolStatus;
+
+  /// show_image 工具的图片 URL 列表（已由桌面端转换为手机可访问的地址）
+  List<String> imagePaths = [];
 
   /// 确认请求 ID（confirm 类型专用）
   String? confirmId;
@@ -32,7 +38,8 @@ class RemoteMessageInfo {
     this.toolStatus = 'running',
     this.confirmId,
     this.isStreaming = false,
-  });
+    List<String>? imagePaths,
+  }) : imagePaths = imagePaths ?? [];
 
   static String _newId() {
     final t = DateTime.now().microsecondsSinceEpoch;
@@ -56,15 +63,22 @@ class RemoteMessageInfo {
     required String toolName,
     required String toolStatus,
     Map<String, dynamic>? args,
-  }) =>
-      RemoteMessageInfo._(
-        id: _newId(),
-        type: RemoteMessageInfoType.tool,
-        toolId: toolId,
-        toolName: toolName,
-        toolStatus: toolStatus,
-        content: _argsPreview(args),
-      );
+  }) {
+    final paths = <String>[];
+    if (toolName == 'show_image' && args != null) {
+      final p = args['paths'];
+      if (p is List) paths.addAll(p.cast<String>());
+    }
+    return RemoteMessageInfo._(
+      id: _newId(),
+      type: RemoteMessageInfoType.tool,
+      toolId: toolId,
+      toolName: toolName,
+      toolStatus: toolStatus,
+      content: _argsPreview(args),
+      imagePaths: paths.isEmpty ? null : paths,
+    );
+  }
 
   factory RemoteMessageInfo.confirm({
     required String confirmId,
@@ -88,5 +102,21 @@ class RemoteMessageInfo {
     if (args == null || args.isEmpty) return '';
     final val = args.entries.first.value.toString();
     return val.length > 60 ? '${val.substring(0, 60)}…' : val;
+  }
+
+  /// 从 SQLite 行恢复（保留存储的 id）
+  factory RemoteMessageInfo.fromMap(Map<String, dynamic> m) {
+    final type = RemoteMessageInfoType.values.byName(m['type'] as String);
+    final info = RemoteMessageInfo._(
+      id: m['id'] as String,
+      type: type,
+      content: m['content'] as String? ?? '',
+      toolName: m['tool_name'] as String?,
+      toolId: m['tool_id'] as String?,
+      toolStatus: m['tool_status'] as String? ?? 'success',
+      isStreaming: false,
+    );
+    info.reasoning = m['reasoning'] as String? ?? '';
+    return info;
   }
 }

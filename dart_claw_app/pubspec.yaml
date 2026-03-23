@@ -38,6 +38,9 @@ dependencies:
   media_kit_video: ^2.0.1
   media_kit_libs_video: ^1.0.7
   url_launcher: ^6.3.1
+  gpt_markdown: ^1.1.5
+  sqflite: ^2.3.0
+  path: ^1.9.0
 
 dev_dependencies:
   flutter_test:

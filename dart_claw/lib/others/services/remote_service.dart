@@ -15,8 +15,11 @@ class RemoteService {
   static const int defaultPort = 37788;
   static const Duration _pingInterval = Duration(seconds: 15);
 
+  static const _imageExtensions = {'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'};
+
   HttpServer? _server;
   final _clients = <WebSocket>{};
+  String? _localIp;
 
   /// 当前已连接的移动端数量（可响应式绑定到 UI）。
   final connectedCount = 0.obs;
@@ -27,9 +30,29 @@ class RemoteService {
 
   Future<void> start({int port = defaultPort}) async {
     _server = await HttpServer.bind(InternetAddress.anyIPv4, port);
+    _localIp = await _resolveLocalIp();
     _server!.listen(_handleRequest);
     _startPingTimer();
-    print('[RemoteService] Listening on ws://0.0.0.0:$port');
+    print('[RemoteService] Listening on ws://0.0.0.0:$port (LAN IP: $_localIp)');
+  }
+
+  Future<String> _resolveLocalIp() async {
+    for (final iface in await NetworkInterface.list()) {
+      for (final addr in iface.addresses) {
+        if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
+          return addr.address;
+        }
+      }
+    }
+    return '127.0.0.1';
+  }
+
+  /// 将桌面本地图片路径转为手机可访问的 HTTP URL。
+  /// 网络 URL 原样返回。
+  String imageUrl(String path) {
+    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+    final ip = _localIp ?? '127.0.0.1';
+    return 'http://$ip:$defaultPort/image?path=${Uri.encodeComponent(path)}';
   }
 
   Future<void> stop() async {
@@ -47,6 +70,12 @@ class RemoteService {
   // ── 连接处理 ──────────────────────────────────────────────────────────────
 
   Future<void> _handleRequest(HttpRequest request) async {
+    // ── 图片服务 (/image?path=...) ─────────────────────────────────────────
+    if (request.uri.path == '/image') {
+      await _serveImage(request);
+      return;
+    }
+    // ── WebSocket 升级 ────────────────────────────────────────────────────
     if (!WebSocketTransformer.isUpgradeRequest(request)) {
       request.response
         ..statusCode = HttpStatus.badRequest
@@ -55,6 +84,45 @@ class RemoteService {
     }
     final ws = await WebSocketTransformer.upgrade(request);
     _addClient(ws);
+  }
+
+  Future<void> _serveImage(HttpRequest request) async {
+    final path = request.uri.queryParameters['path'] ?? '';
+    if (path.isEmpty) {
+      request.response
+        ..statusCode = HttpStatus.badRequest
+        ..close();
+      return;
+    }
+    // 仅允许图片扩展名，防止任意文件读取
+    final ext = path.split('.').last.toLowerCase();
+    if (!_imageExtensions.contains(ext)) {
+      request.response
+        ..statusCode = HttpStatus.forbidden
+        ..close();
+      return;
+    }
+    final file = File(path);
+    if (!await file.exists()) {
+      request.response
+        ..statusCode = HttpStatus.notFound
+        ..close();
+      return;
+    }
+    final mime = switch (ext) {
+      'jpg' || 'jpeg' => 'image/jpeg',
+      'png' => 'image/png',
+      'gif' => 'image/gif',
+      'webp' => 'image/webp',
+      'bmp' => 'image/bmp',
+      _ => 'application/octet-stream',
+    };
+    final bytes = await file.readAsBytes();
+    request.response
+      ..headers.set('Content-Type', mime)
+      ..headers.set('Access-Control-Allow-Origin', '*')
+      ..add(bytes);
+    await request.response.close();
   }
 
   void _addClient(WebSocket ws) {
@@ -95,8 +163,10 @@ class RemoteService {
         break;
       case 'task':
         final content = msg['content'] as String? ?? '';
+        final sessionId = msg['session_id'] as String?;
         if (content.isNotEmpty) {
-          Get.find<HomeLogic>().sendMessage(content, isRemote: true);
+          Get.find<HomeLogic>()
+              .sendMessage(content, isRemote: true, sessionId: sessionId);
         }
         break;
       case 'confirm':
@@ -112,6 +182,9 @@ class RemoteService {
         if (id.isNotEmpty) {
           Get.find<HomeLogic>().respondUserInput(id, value);
         }
+        break;
+      case 'stop':
+        Get.find<HomeLogic>().stopAgent();
         break;
       default:
         print('[RemoteService] Unknown message type: ${msg['type']}');

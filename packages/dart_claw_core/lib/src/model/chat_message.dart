@@ -4,8 +4,8 @@ import 'tool_call_record.dart';
 /// 消息角色
 enum ClawChatMessageRole { user, assistant, system }
 
-/// 消息类型（用于区分普通消息、摘要、UI 分隔行）
-enum ClawChatMessageType { message, summary, divider }
+/// 消息类型（用于区分普通消息、摘要、UI 分隔行、日志行）
+enum ClawChatMessageType { message, summary, divider, log }
 
 /// 消息状态
 enum ClawChatMessageStatus {
@@ -110,6 +110,16 @@ class ClawChatMessage {
         status: ClawChatMessageStatus.done,
         type: ClawChatMessageType.divider,
         blocks: const [],
+      );
+
+  /// 创建一条内联日志行（type=log，仅供可视化，不进入 API 上下文）
+  factory ClawChatMessage.log(String content) => ClawChatMessage(
+        id: _uuid(),
+        role: ClawChatMessageRole.system,
+        timestamp: DateTime.now(),
+        status: ClawChatMessageStatus.done,
+        type: ClawChatMessageType.log,
+        blocks: [ClawContentBlock(content: content, isStreaming: false)],
       );
 
   // ─── Mutation helpers (均返回新实例，保持不可变) ──────────────────────────

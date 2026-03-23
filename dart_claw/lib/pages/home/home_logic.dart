@@ -9,6 +9,7 @@ import 'package:dart_claw/others/tool/snackbar_tool.dart';
 import 'package:dart_claw/others/model/claw_session_info.dart';
 import 'package:dart_claw/others/tool/database_tool.dart';
 import 'package:dart_claw/pages/home/dialog/password_dialog.dart';
+import 'package:dart_claw/pages/home/dialog/agent_error_dialog.dart';
 import 'package:dart_claw/pages/home/dialog/ask_user_dialog.dart';
 import 'package:dart_claw/pages/home/dialog/skill_failure_dialog.dart';
 import 'package:dart_claw/others/dart_claw_core_extra_tools/mouse_keyboard_tools.dart';
@@ -179,13 +180,26 @@ class HomeLogic extends GetxController {
 
   /// 用户发送一条消息（由 UI 层调用）
   void sendMessage(String content,
-      {List<String> attachedPaths = const [], bool isRemote = false}) {
+      {List<String> attachedPaths = const [],
+      bool isRemote = false,
+      String? sessionId}) {
     if (content.trim().isEmpty && attachedPaths.isEmpty) return;
     if (isRunning.value) return;
 
-    // 历史消息快照（不含即将添加的新消息，排除 divider 行）
+    // 移动端发起的新 session：若 session_id 与当前不符则重置桌面 UI
+    if (sessionId != null &&
+        currentSessionId.value != null &&
+        currentSessionId.value != sessionId) {
+      currentSessionId.value = null;
+      messages.clear();
+      sessionTotalTokens.value = 0;
+    }
+
+    // 历史消息快照（不含即将添加的新消息，排除 divider 和 log 行）
     final history = messages
-        .where((m) => m.type != ClawChatMessageType.divider)
+        .where((m) =>
+            m.type != ClawChatMessageType.divider &&
+            m.type != ClawChatMessageType.log)
         .toList();
 
     // 1. 添加用户消息气泡（存储展示文本 + 附件路径）
@@ -206,7 +220,7 @@ class HomeLogic extends GetxController {
     final skillName = pendingSkillName.value;
     pendingSkillName.value = null;
     _runAgent(content.trim(), attachedPaths, assistantMsg.id, history, userMsg,
-        explicitSkillName: skillName, isRemote: isRemote);
+        explicitSkillName: skillName, isRemote: isRemote, externalSessionId: sessionId);
   }
 
   static const _imageExtensions = {'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'};
@@ -241,6 +255,21 @@ class HomeLogic extends GetxController {
 
   // ─── 事件处理 ─────────────────────────────────────────────────────────────
 
+  void _broadcast(Map<String, dynamic> data) {
+    RemoteService().broadcast({...data, 'session_id': currentSessionId.value});
+  }
+
+  /// show_image 工具广播时，将本地路径替换为手机可访问的 HTTP URL。
+  /// 其他工具原样返回 args。
+  Map<String, dynamic> _remoteArgs(ClawToolCallRecord record) {
+    if (record.name != 'show_image') return record.args;
+    final paths = record.args['paths'];
+    if (paths is! List || paths.isEmpty) return record.args;
+    final transformed =
+        paths.map((p) => RemoteService().imageUrl(p.toString())).toList();
+    return {...record.args, 'paths': transformed};
+  }
+
   /// 处理来自 ClawAgentRunner 的事件（阶段二实现，目前为 stub）
   void handleEvent(ClawAgentEvent event) {
     switch (event) {
@@ -251,23 +280,24 @@ class HomeLogic extends GetxController {
       case ClawAgentMessageChunkEvent(:final messageId, :final chunk):
         _appendChunk(messageId, chunk);
         _scrollToBottom();
-        RemoteService().broadcast({'type': 'chunk', 'content': chunk});
+        _broadcast({'type': 'chunk', 'content': chunk});
 
       case ClawAgentReasoningChunkEvent(:final messageId, :final chunk):
         _appendReasoningChunk(messageId, chunk);
         _scrollToBottom();
-        RemoteService().broadcast({'type': 'reasoning_chunk', 'content': chunk});
+        _broadcast({'type': 'reasoning_chunk', 'content': chunk});
 
       case ClawAgentMessageDoneEvent(:final messageId, :final toolCalls):
         _finalizeMessage(messageId, toolCalls: toolCalls);
+        _broadcast({'type': 'message_done'});
 
       case ClawAgentToolEvent(:final record):
         _upsertToolRecord(record);
-        RemoteService().broadcast({
+        _broadcast({
           'type': 'tool',
           'id': record.id,
           'name': record.name,
-          'args': record.args,
+          'args': _remoteArgs(record),
           'status': record.status.name,
         });
 
@@ -279,7 +309,7 @@ class HomeLogic extends GetxController {
           // 工具 block 已通过 ClawAgentToolEvent 更新为 awaitingConfirmation
           // UI 会自动显示内嵌确认卡片
           _scrollToBottom();
-          RemoteService().broadcast({
+          _broadcast({
             'type': 'confirm_request',
             'id': requestId,
             'message': message,
@@ -318,7 +348,7 @@ class HomeLogic extends GetxController {
             reason: reason,
           );
         }
-        RemoteService().broadcast({
+        _broadcast({
           'type': 'error',
           'message': 'Skill "$skillName" 失败于「$stepTitle」',
         });
@@ -332,18 +362,17 @@ class HomeLogic extends GetxController {
         streamingMessageId = null;
         activeSkillName.value = null;
         _checkAndTriggerCompression();
-        RemoteService().broadcast({'type': 'done'});
+        _broadcast({'type': 'done'});
 
       case ClawAgentErrorEvent(:final message):
         _appendError(message);
         isRunning.value = false;
         streamingMessageId = null;
         activeSkillName.value = null;
-        RemoteService().broadcast({'type': 'error', 'message': message});
+        _broadcast({'type': 'error', 'message': message});
 
       case ClawAgentLogEvent(:final content):
-        // 普通日志暂不展示在消息列表，后续可加到 Info 面板
-        RemoteService().broadcast({'type': 'log', 'content': content});
+        _broadcast({'type': 'log', 'content': content});
         break;
     }
   }
@@ -453,48 +482,23 @@ class HomeLogic extends GetxController {
   }
 
   void _appendError(String fullMessage) {
-    // 1. 移除 assistant 占位消息（不在聊天中展示错误）
+    // 1. Finalize the streaming bubble with error status (don't remove it)
     if (streamingMessageId != null) {
-      messages.removeWhere((m) => m.id == streamingMessageId);
+      final idx = messages.indexWhere((m) => m.id == streamingMessageId);
+      if (idx != -1) {
+        messages[idx] = messages[idx].copyWith(
+          status: ClawChatMessageStatus.error,
+        );
+      }
     }
 
-    // 2. 完整错误信息打印到控制台，方便复制调试
+    // 2. Add compact inline error log
+    messages.add(ClawChatMessage.log('⚠ $fullMessage'));
+
+    // 3. Full error to debug console + dialog
     debugPrint('[dart_claw] ❌ Agent error:\n$fullMessage');
 
-    // 3. 弹窗展示（可滚动，方便阅读）
-    Get.dialog(
-      AlertDialog(
-        backgroundColor: AppColors.dialogBg,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: Colors.red, width: 0.5),
-        ),
-        title: const Text(
-          'Error',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        content: SizedBox(
-          width: 480,
-          child: SingleChildScrollView(
-            child: Text(
-              fullMessage,
-              style: const TextStyle(
-                color: Colors.white70,
-                fontSize: 12,
-                fontFamily: 'monospace',
-                height: 1.5,
-              ),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: Get.back,
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
+    AgentErrorDialog.show(fullMessage);
   }
 
   /// 当前配置的模型名称（用于 Info 面板显示）
@@ -546,9 +550,13 @@ class HomeLogic extends GetxController {
     ClawChatMessage userMsg, {
     String? explicitSkillName,
     bool isRemote = false,
+    String? externalSessionId,
   }) async {
     // ── 确保 session 存在，再持久化用户消息 ──
-    await _ensureSession(firstUserMessage: rawText, isRemote: isRemote);
+    await _ensureSession(
+        firstUserMessage: rawText,
+        isRemote: isRemote,
+        externalSessionId: externalSessionId);
     final apiContent = _buildApiContent(rawText, attachedPaths);
     await _persistMessage(userMsg, messages.indexOf(userMsg));
 
@@ -637,13 +645,23 @@ class HomeLogic extends GetxController {
 
   /// 若当前不存在 session，自动创建一个（懒创建）
   Future<void> _ensureSession(
-      {required String firstUserMessage, bool isRemote = false}) async {
+      {required String firstUserMessage,
+      bool isRemote = false,
+      String? externalSessionId}) async {
     if (currentSessionId.value != null) return;
+    // 若移动端提供的 session_id 已存在于本地 DB，直接复用，避免创建重复 session
+    if (externalSessionId != null) {
+      final existingIdx = sessions.indexWhere((s) => s.id == externalSessionId);
+      if (existingIdx != -1) {
+        currentSessionId.value = externalSessionId;
+        return;
+      }
+    }
     final title = firstUserMessage.length > 50
         ? '${firstUserMessage.substring(0, 50)}…'
         : firstUserMessage;
     final session = ClawSessionInfo(
-      id: _newId(),
+      id: externalSessionId ?? _newId(),
       title: title,
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
