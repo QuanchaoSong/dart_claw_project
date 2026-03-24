@@ -115,6 +115,10 @@ class ChatLogic extends GetxController {
           final p = args['path'];
           if (p is String && p.isNotEmpty) messages[idx].videoUrl = p;
         }
+        // show_chart: 成功时存储图表数据
+        if (name == 'show_chart' && args != null) {
+          messages[idx].chartData = args;
+        }
         messages.refresh();
         return;
       }
@@ -129,7 +133,15 @@ class ChatLogic extends GetxController {
 
   void _onConfirmRequest(Map<String, dynamic> data) {
     final id = data['id'] as String? ?? '';
-    final message = data['message'] as String? ?? '';
+    final toolName = data['message'] as String? ?? '';
+    final args = data['args'] as Map<String, dynamic>?;
+    // Build a human-readable description: tool name + all arg values
+    final argLines = args?.entries
+        .map((e) => '${e.key}: ${e.value}')
+        .join('\n');
+    final message = argLines != null && argLines.isNotEmpty
+        ? '$toolName\n$argLines'
+        : toolName;
     messages.add(RemoteMessageInfo.confirm(confirmId: id, message: message));
   }
 

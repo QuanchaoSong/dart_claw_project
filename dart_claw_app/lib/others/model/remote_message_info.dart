@@ -26,6 +26,9 @@ class RemoteMessageInfo {
   /// show_video 工具的视频 URL（已由桌面端转换为手机可访问的地址）
   String? videoUrl;
 
+  /// show_chart 工具的图表数据（原始 args：type / title / x_label / y_label / series）
+  Map<String, dynamic>? chartData;
+
   /// 确认请求 ID（confirm 类型专用）
   String? confirmId;
 
@@ -43,6 +46,7 @@ class RemoteMessageInfo {
     this.isStreaming = false,
     List<String>? imagePaths,
     this.videoUrl,
+    this.chartData,
   }) : imagePaths = imagePaths ?? [];
 
   static String _newId() {
@@ -78,6 +82,10 @@ class RemoteMessageInfo {
       final p = args['path'];
       if (p is String && p.isNotEmpty) videoUrl = p;
     }
+    Map<String, dynamic>? chartData;
+    if (toolName == 'show_chart' && args != null) {
+      chartData = args;
+    }
     return RemoteMessageInfo._(
       id: _newId(),
       type: RemoteMessageInfoType.tool,
@@ -87,6 +95,7 @@ class RemoteMessageInfo {
       content: _argsPreview(args),
       imagePaths: paths.isEmpty ? null : paths,
       videoUrl: videoUrl,
+      chartData: chartData,
     );
   }
 

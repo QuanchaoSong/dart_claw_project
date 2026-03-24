@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../others/model/remote_message_info.dart';
+import 'chart_card_view.dart';
 import 'video_card_view.dart';
 
 class ToolCardView extends StatelessWidget {
@@ -26,7 +27,11 @@ class ToolCardView extends StatelessWidget {
         msg.toolStatus == 'success' &&
         msg.videoUrl != null;
 
-    final hasSubview = showImages || showVideo;
+    final showChart = msg.toolName == 'show_chart' &&
+        msg.toolStatus == 'success' &&
+        msg.chartData != null;
+
+    final hasSubview = showImages || showVideo || showChart;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -105,7 +110,24 @@ class ToolCardView extends StatelessWidget {
               ),
             ),
             child: VideoCardView(url: msg.videoUrl!),
-          ),      ],
+          ),
+        // ── 图表卡片（仅 show_chart 成功时）──────────────────────────────────
+        if (showChart)
+          Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.04),
+              borderRadius: const BorderRadius.vertical(
+                  bottom: Radius.circular(10)),
+              border: Border(
+                left: BorderSide(color: Colors.white.withOpacity(0.07)),
+                right: BorderSide(color: Colors.white.withOpacity(0.07)),
+                bottom: BorderSide(color: Colors.white.withOpacity(0.07)),
+              ),
+            ),
+            child: ChartCardView(data: msg.chartData!),
+          ),
+      ],
     );
   }
 }

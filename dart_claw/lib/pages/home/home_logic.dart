@@ -308,7 +308,7 @@ class HomeLogic extends GetxController {
           'status': record.status.name,
         });
 
-      case ClawAgentConfirmRequestEvent(:final requestId, :final message):
+      case ClawAgentConfirmRequestEvent(:final requestId, :final message, :final record):
         if (allowAllTools.value) {
           // Session 级别「全部放行」开启时，自动确认无需用户介入
           _activeRunner?.confirm(requestId, allow: true);
@@ -320,6 +320,7 @@ class HomeLogic extends GetxController {
             'type': 'confirm_request',
             'id': requestId,
             'message': message,
+            'args': record.args,
           });
         }
         break;
