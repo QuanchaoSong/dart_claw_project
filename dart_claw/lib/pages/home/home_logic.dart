@@ -299,6 +299,23 @@ class HomeLogic extends GetxController {
       if (path is! String || path.isEmpty) return record.args;
       return {...record.args, 'path': RemoteService().videoUrl(path)};
     }
+    if (record.name == 'show_file') {
+      final rawPath = record.args['path'] as String? ?? '';
+      if (rawPath.isEmpty) return record.args;
+      final expandedPath = rawPath.startsWith('~/')
+          ? (Platform.environment['HOME'] ?? '') + rawPath.substring(1)
+          : rawPath;
+      final file = File(expandedPath);
+      final fileName = file.uri.pathSegments.last;
+      int size = 0;
+      try { size = file.statSync().size; } catch (_) {}
+      return {
+        ...record.args,
+        'url': RemoteService().fileUrl(rawPath),
+        'name': fileName,
+        'size': size,
+      };
+    }
     return record.args;
   }
 
@@ -626,6 +643,7 @@ class HomeLogic extends GetxController {
         VisionReadImageTool(),
         ShowChartTool(),
         ShowVideoTool(),
+        ShowFileTool(),
         ScreenshotTool(),
         MouseMoveTool(),
         MouseClickTool(),

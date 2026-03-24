@@ -18,6 +18,7 @@ export 'src/tools/builtin_tools.dart';
 export 'src/tools/show_image_tool.dart';
 export 'src/tools/show_chart_tool.dart';
 export 'src/tools/show_video_tool.dart';
+export 'src/tools/show_file_tool.dart';
 export 'src/tools/interactive_run_command_tool.dart';
 export 'src/tools/ask_user_tool.dart';
 export 'src/tools/screenshot_tool.dart';

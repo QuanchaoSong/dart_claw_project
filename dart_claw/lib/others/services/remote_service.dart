@@ -65,6 +65,12 @@ class RemoteService {
     return 'http://$ip:$defaultPort/video?path=${Uri.encodeComponent(path)}';
   }
 
+  /// 将桌面本地文件路径转为手机可下载的 HTTP URL。
+  String fileUrl(String path) {
+    final ip = _localIp ?? '127.0.0.1';
+    return 'http://$ip:$defaultPort/file?path=${Uri.encodeComponent(path)}';
+  }
+
   Future<void> stop() async {
     _pingTimer?.cancel();
     _pingTimer = null;
@@ -94,8 +100,11 @@ class RemoteService {
     if (request.uri.path == '/skills') {
       await _serveSkills(request);
       return;
-    }
-    // ── WebSocket 升级 ────────────────────────────────────────────────────
+    }    // ── 文件下载 (/file?path=...) ────────────────────────────────────────────
+    if (request.uri.path == '/file') {
+      await _serveFile(request);
+      return;
+    }    // ── WebSocket 升级 ────────────────────────────────────────────────────
     if (!WebSocketTransformer.isUpgradeRequest(request)) {
       request.response
         ..statusCode = HttpStatus.badRequest
@@ -248,6 +257,51 @@ class RemoteService {
         ..headers.set('Content-Type', 'application/json')
         ..write('[]');
     }
+    await request.response.close();
+  }
+
+  // ── 文件下载服务（GET /file?path=...）──────────────────────────────────────────
+
+  Future<void> _serveFile(HttpRequest request) async {
+    final rawPath = request.uri.queryParameters['path'] ?? '';
+    if (rawPath.isEmpty) {
+      request.response
+        ..statusCode = HttpStatus.badRequest
+        ..close();
+      return;
+    }
+    final path = rawPath.startsWith('~/')
+        ? (Platform.environment['HOME'] ?? '') + rawPath.substring(1)
+        : rawPath;
+    final file = File(path);
+    if (!await file.exists()) {
+      request.response
+        ..statusCode = HttpStatus.notFound
+        ..close();
+      return;
+    }
+    final name = file.uri.pathSegments.last;
+    final fileSize = await file.length();
+    final ext = name.contains('.') ? name.split('.').last.toLowerCase() : '';
+    final mime = switch (ext) {
+      'pdf' => 'application/pdf',
+      'jpg' || 'jpeg' => 'image/jpeg',
+      'png' => 'image/png',
+      'gif' => 'image/gif',
+      'mp4' => 'video/mp4',
+      'mov' => 'video/quicktime',
+      'txt' => 'text/plain',
+      'json' => 'application/json',
+      'zip' => 'application/zip',
+      _ => 'application/octet-stream',
+    };
+    // 流式传输——不把大文件读入内存
+    request.response.headers
+      ..set('Content-Type', mime)
+      ..set('Content-Disposition', 'attachment; filename="$name"')
+      ..set('Content-Length', fileSize.toString())
+      ..set('Access-Control-Allow-Origin', '*');
+    await request.response.addStream(file.openRead());
     await request.response.close();
   }
 

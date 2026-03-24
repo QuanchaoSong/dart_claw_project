@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../model/remote_message_info.dart';
 import 'chart_card_view.dart';
+import 'file_info_view.dart';
 import 'video_card_view.dart';
 
 class ToolCardView extends StatelessWidget {
@@ -31,7 +32,11 @@ class ToolCardView extends StatelessWidget {
         msg.toolStatus == 'success' &&
         msg.chartData != null;
 
-    final hasSubview = showImages || showVideo || showChart;
+    final showFile = msg.toolName == 'show_file' &&
+        msg.toolStatus == 'success' &&
+        msg.fileInfo != null;
+
+    final hasSubview = showImages || showVideo || showChart || showFile;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -127,6 +132,30 @@ class ToolCardView extends StatelessWidget {
             ),
             child: ChartCardView(data: msg.chartData!),
           ),
+        // ── 文件下载卡片（仅 show_file 成功时）────────────────────────────────
+        if (showFile)
+          Builder(builder: (_) {
+            final info = msg.fileInfo!;
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.04),
+                borderRadius: const BorderRadius.vertical(
+                    bottom: Radius.circular(10)),
+                border: Border(
+                  left: BorderSide(color: Colors.white.withOpacity(0.07)),
+                  right: BorderSide(color: Colors.white.withOpacity(0.07)),
+                  bottom: BorderSide(color: Colors.white.withOpacity(0.07)),
+                ),
+              ),
+              child: FileInfoView(
+                url: info['url'] as String,
+                name: info['name'] as String,
+                size: info['size'] as int,
+                description: info['description'] as String?,
+              ),
+            );
+          }),
       ],
     );
   }

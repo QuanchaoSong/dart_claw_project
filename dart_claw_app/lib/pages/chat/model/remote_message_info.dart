@@ -45,6 +45,19 @@ class RemoteMessageInfo {
     return toolArgs;
   }
 
+  /// show_file 工具：文件信息映射（url / name / size / description）
+  Map<String, dynamic>? get fileInfo {
+    if (toolName != 'show_file') return null;
+    final url = toolArgs?['url'] as String?;
+    if (url == null || url.isEmpty) return null;
+    return {
+      'url': url,
+      'name': toolArgs?['name'] as String? ?? 'file',
+      'size': toolArgs?['size'] as int? ?? 0,
+      'description': toolArgs?['description'] as String?,
+    };
+  }
+
   /// 确认请求 ID（confirm 类型专用）
   String? confirmId;
 
