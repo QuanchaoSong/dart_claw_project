@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -69,6 +70,42 @@ class _SessionInfoAndSettingsView extends StatelessWidget {
                 ),
               ),
 
+              // ── 模型 / Token 统计 ─────────────────────────────────────────────
+              Obx(() {
+                final model = logic.sessionModelId.value;
+                final tokens = logic.sessionTokens.value;
+                final hasInfo = model.isNotEmpty || tokens > 0;
+                if (!hasInfo) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+                  child: Row(
+                    children: [
+                      if (model.isNotEmpty) ...[
+                        const Icon(Icons.auto_awesome_rounded,
+                            size: 12, color: Colors.white38),
+                        const SizedBox(width: 4),
+                        Text(
+                          model,
+                          style: const TextStyle(
+                              fontSize: 11, color: Colors.white38),
+                        ),
+                        const SizedBox(width: 12),
+                      ],
+                      if (tokens > 0) ...[
+                        const Icon(Icons.data_usage_rounded,
+                            size: 12, color: Colors.white38),
+                        const SizedBox(width: 4),
+                        Text(
+                          '$tokens tokens',
+                          style: const TextStyle(
+                              fontSize: 11, color: Colors.white38),
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              }),
+
               const _PanelDivider(),
 
               // ── TOOL CALLS ───────────────────────────────────────────────
@@ -108,8 +145,10 @@ class _SessionInfoAndSettingsView extends StatelessWidget {
                     value: logic.autoFillSudo.value,
                     onChanged: (v) => logic.setSetting('auto_fill_sudo', v),
                   )),
-              // 注意：手机端不提供密码输入框。sudo 密码存储在桌面端本地内存，
-              // 移动端仅控制开关，密码需在桌面端直接配置。
+              Obx(() {
+                if (!logic.autoFillSudo.value) return const SizedBox.shrink();
+                return _SudoPasswordField(logic: logic);
+              }),
               const SizedBox(height: 8),
             ],
           ),
@@ -225,6 +264,95 @@ class _PanelDivider extends StatelessWidget {
     return const Padding(
       padding: EdgeInsets.symmetric(horizontal: 20),
       child: Divider(color: Colors.white12, height: 1),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// sudo 密码输入块（开关打开时才显示）
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _SudoPasswordField extends StatefulWidget {
+  const _SudoPasswordField({required this.logic});
+  final ChatLogic logic;
+
+  @override
+  State<_SudoPasswordField> createState() => _SudoPasswordFieldState();
+}
+
+class _SudoPasswordFieldState extends State<_SudoPasswordField> {
+  final _controller = TextEditingController();
+  Timer? _debounce;
+  var _obscure = true;
+  var _sent = false; // 头像标记第一次发送后变为 ✓
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onChanged(String value) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 600), () {
+      widget.logic.setSudoPasswordSetting(value.trim());
+      if (mounted && value.trim().isNotEmpty) setState(() => _sent = true);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+      child: TextField(
+        controller: _controller,
+        obscureText: _obscure,
+        onChanged: _onChanged,
+        style: const TextStyle(color: Colors.white, fontSize: 13),
+        decoration: InputDecoration(
+          hintText: '输入 sudo 密码…',
+          hintStyle: const TextStyle(color: Colors.white30, fontSize: 12),
+          filled: true,
+          fillColor: Colors.white.withValues(alpha: 0.05),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide:
+                BorderSide(color: Colors.white.withValues(alpha: 0.12)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide:
+                BorderSide(color: Colors.white.withValues(alpha: 0.12)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: Colors.amber),
+          ),
+          // 显示/隐藏 + 已同步标记
+          suffixIcon: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_sent)
+                const Padding(
+                  padding: EdgeInsets.only(right: 4),
+                  child: Icon(Icons.check_circle_rounded,
+                      size: 14, color: Colors.green),
+                ),
+              IconButton(
+                icon: Icon(
+                  _obscure ? Icons.visibility_off : Icons.visibility,
+                  color: Colors.white38,
+                  size: 18,
+                ),
+                onPressed: () => setState(() => _obscure = !_obscure),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

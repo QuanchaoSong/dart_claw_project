@@ -172,6 +172,19 @@ class HomeLogic extends GetxController {
   /// 非 null 时 chat_area_view 会在消息列表下方渲染交互卡片
   final pendingUserInput = Rxn<PendingUserInput>();
 
+  /// Plan A（Dialog）时的 ask_user completer 集合，key = requestId
+  /// 移动端通过 WS 'input' 消息抢先回答时也会从这里 complete
+  final _pendingAskUserCompleters = <String, Completer<String?>>{};
+
+  /// 移动端 sudo_prompt 回调（桌面弹窗和移动端均可完成）
+  String? _pendingSudoId;
+  Completer<String?>? _pendingSudoCompleter;
+
+  /// 当前 agent 任务是否由移动端远程发起
+  /// 为 true 时，桌面端不弹出任何 Dialog（ask_user / password / skill_failure），
+  /// 所有交互均由手机端执行。
+  var _isRemoteSession = false;
+
   /// 缓存的已安装 Skill 列表（供选择弹窗使用，Settings 刷新后自动失效）
   final _cachedSkills = <ClawSkillInfo>[];
 
@@ -369,13 +382,24 @@ class HomeLogic extends GetxController {
           );
         }
         _broadcast({
-          'type': 'error',
-          'message': 'Skill "$skillName" 失败于「$stepTitle」',
+          'type': 'skill_failure',
+          'skill_name': skillName,
+          'step_title': stepTitle,
+          'reason': reason == ClawSkillFailureReason.unexpectedTool
+              ? 'unexpected_tool'
+              : 'tool_failed',
+          'tool_name': toolName,
+          'failure_report': failureReport,
         });
 
       case ClawAgentTokenUsageEvent(:final promptTokens, :final totalTokens):
         sessionTotalTokens.value += totalTokens;
         _lastPromptTokens = promptTokens;
+        _broadcast({
+          'type': 'session_stats',
+          'total_tokens': sessionTotalTokens.value,
+          'model_id': currentModelId,
+        });
 
       case ClawAgentDoneEvent():
         isRunning.value = false;
@@ -572,6 +596,7 @@ class HomeLogic extends GetxController {
     bool isRemote = false,
     String? externalSessionId,
   }) async {
+    _isRemoteSession = isRemote;
     // ── 确保 session 存在，再持久化用户消息 ──
     await _ensureSession(
         firstUserMessage: rawText,
@@ -742,48 +767,112 @@ class HomeLogic extends GetxController {
       final stored = sudoPasswordController.text.trim();
       if (stored.isNotEmpty) return Future.value(stored);
     }
-    return Get.dialog<String>(
-      PasswordDialog(prompt: prompt),
-      barrierDismissible: false,
-    );
+    final requestId = _newId();
+    final completer = Completer<String?>();
+    _pendingSudoId = requestId;
+    _pendingSudoCompleter = completer;
+    // 广播给移动端
+    _broadcast({'type': 'sudo_prompt', 'id': requestId, 'prompt': prompt});
+    // 远程会话：只等移动端回答，不弹桌面弹窗
+    if (!_isRemoteSession) {
+      Get.dialog<String>(
+        PasswordDialog(prompt: prompt),
+        barrierDismissible: false,
+      ).then((val) => _completeSudoRequest(requestId, val));
+    }
+    return completer.future;
+  }
+
+  /// 移动端通过 Info 面板设置 sudo 密码（写入桌面本地存储）
+  void setSudoPassword(String password) {
+    sudoPasswordController.text = password;
   }
 
   // ─── ask_user 内联卡片（Plan B）/ Dialog（Plan A）───────────────────────────
 
-  /// AskUserTool 回调：根据设置决定用 Dialog 还是内联卡片。
+  /// AskUserTool 回调：根据设置决定用 Dialog 还是内联卡片，同时向移动端广播。
   Future<String?> _promptAskUser(AskUserRequest request) {
-    final useDialog = AppConfigService.shared.config.value.session.askUserUseDialog;
-    if (useDialog) {
-      return Get.dialog<String>(AskUserDialog(request: request));
-    }
-    // Plan B：内联卡片
     final requestId = _newId();
     final completer = Completer<String?>();
-    pendingUserInput.value = PendingUserInput(
-      requestId: requestId,
-      request: request,
-      completer: completer,
-    );
-    _scrollToBottom();
+    // 广播给移动端
+    _broadcast({
+      'type': 'ask_user',
+      'id': requestId,
+      'question': request.question,
+      'input_type': request.type.name,
+      'options': request.options,
+      if (request.hint != null) 'hint': request.hint,
+    });
+    if (_isRemoteSession) {
+      // 远程会话：只等移动端回答，不在桌面弹窗或显示内联卡片
+      _pendingAskUserCompleters[requestId] = completer;
+    } else {
+      final useDialog = AppConfigService.shared.config.value.session.askUserUseDialog;
+      if (useDialog) {
+        // Plan A：桌面弹窗；completer 也注册好，让移动端可抢先回答
+        _pendingAskUserCompleters[requestId] = completer;
+        Get.dialog<String>(AskUserDialog(request: request), barrierDismissible: false).then((val) {
+          if (val != null) {
+            respondUserInput(requestId, val);
+          } else {
+            cancelUserInput(requestId);
+          }
+        });
+      } else {
+        // Plan B：内联卡片
+        pendingUserInput.value = PendingUserInput(
+          requestId: requestId,
+          request: request,
+          completer: completer,
+        );
+        _scrollToBottom();
+      }
+    }
     return completer.future;
   }
 
-  /// UI 层调用：用户提交了内联卡片的答案
+  /// UI 层调用：用户提交了内联卡片的答案（或移动端 WS 'input' 回复）
   void respondUserInput(String requestId, String value) {
+    // Plan B（内联卡片）
     final pending = pendingUserInput.value;
-    if (pending == null || pending.requestId != requestId) return;
-    pendingUserInput.value = null;
-    pending.completer.complete(value);
+    if (pending != null && pending.requestId == requestId) {
+      pendingUserInput.value = null;
+      pending.completer.complete(value);
+      return;
+    }
+    // Plan A（Dialog）—— 桌面弹窗返回或移动端抢先回答
+    final c = _pendingAskUserCompleters.remove(requestId);
+    c?.complete(value);
   }
 
-  /// UI 层调用：用户取消了内联卡片
-  void cancelUserInput(String requestId) => _cancelPendingUserInput();
+  /// UI 层调用：用户取消了内联卡片或移动端取消
+  void cancelUserInput(String requestId) {
+    final pending = pendingUserInput.value;
+    if (pending != null && pending.requestId == requestId) {
+      _cancelPendingUserInput();
+      return;
+    }
+    final c = _pendingAskUserCompleters.remove(requestId);
+    c?.complete(null);
+  }
 
   void _cancelPendingUserInput() {
     final pending = pendingUserInput.value;
     if (pending == null) return;
     pendingUserInput.value = null;
     pending.completer.complete(null);
+  }
+
+  /// 移动端通过 WS 'sudo_input' 提交/桌面弹窗返回 sudo 密码
+  void respondSudoPassword(String requestId, String? password) =>
+      _completeSudoRequest(requestId, (password?.isEmpty ?? true) ? null : password);
+
+  void _completeSudoRequest(String requestId, String? value) {
+    if (_pendingSudoId != requestId) return;
+    final c = _pendingSudoCompleter;
+    _pendingSudoId = null;
+    _pendingSudoCompleter = null;
+    c?.complete(value);
   }
 
   void _showSkillFailureDialog({
@@ -795,6 +884,9 @@ class HomeLogic extends GetxController {
     required ClawSkillFailureReason reason,
   }) {
     debugPrint('[HomeLogic] ⚠️ Skill "$skillName" failed at step "$stepTitle" when calling tool "$toolName". Reason: $reason. Tool output: $toolOutput. Failure report: $failureReport');
+
+    // 远程会话：手机端已收到 skill_failure WS 消息，桌面无需弹窗
+    if (_isRemoteSession) return;
 
     Get.dialog(SkillFailureDialog(
       skillName: skillName,

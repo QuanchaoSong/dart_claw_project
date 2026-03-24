@@ -5,7 +5,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import 'model/ask_user_info.dart';
 import 'model/chat_session_info.dart';
+import 'dialog/ask_user_dialog.dart';
+import 'dialog/skill_failure_dialog.dart';
+import 'dialog/sudo_prompt_dialog.dart';
 import 'model/remote_message_info.dart';
 import 'model/skill_item_info.dart';
 import '../../others/services/connection_service.dart';
@@ -25,6 +29,13 @@ class ChatLogic extends GetxController {
   final allowToolDeviation = true.obs;
   final autoFillSudo = false.obs;
   final pendingSkill = Rxn<String>();
+
+  // ── 模型和 Token 统计─────────────────────────────────────────────────
+  final sessionTokens = 0.obs;
+  final sessionModelId = ''.obs;
+
+  // ── LLM ask_user 待回答请求───────────────────────────────────────────
+  final pendingAskUser = Rxn<AskUserInfo>();
 
   /// 从桌面端获取的已安装 Skill 列表（按需拉取，内存缓存）
   final availableSkills = <SkillItemInfo>[].obs;
@@ -76,6 +87,14 @@ class ChatLogic extends GetxController {
         _onError(msg['message'] as String? ?? '未知错误');
       case 'settings_state':
         _onSettingsState(msg);
+      case 'session_stats':
+        _onSessionStats(msg);
+      case 'ask_user':
+        _onAskUser(msg);
+      case 'skill_failure':
+        _onSkillFailure(msg);
+      case 'sudo_prompt':
+        _onSudoPrompt(msg);
       case 'log':
         break;
     }
@@ -210,6 +229,101 @@ class ChatLogic extends GetxController {
     pendingSkill.value = data['pending_skill'] as String?;
   }
 
+  void _onSessionStats(Map<String, dynamic> data) {
+    if (data['total_tokens'] is int) {
+      sessionTokens.value = data['total_tokens'] as int;
+    }
+    if (data['model_id'] is String) {
+      sessionModelId.value = data['model_id'] as String;
+    }
+  }
+
+  void _onAskUser(Map<String, dynamic> data) {
+    final id = data['id'] as String? ?? '';
+    final question = data['question'] as String? ?? '';
+    final type = data['input_type'] as String? ?? 'text';
+    final options = (data['options'] as List<dynamic>?)
+            ?.map((e) => e.toString())
+            .toList() ??
+        const <String>[];
+    final hint = data['hint'] as String?;
+    if (id.isEmpty) return;
+    final info = AskUserInfo(
+      id: id,
+      question: question,
+      type: type,
+      options: options,
+      hint: hint,
+    );
+    pendingAskUser.value = info;
+    Get.dialog<String>(
+      AskUserDialog(info: info),
+      barrierDismissible: false,
+    ).then((value) {
+      pendingAskUser.value = null;
+      if (value != null && value.isNotEmpty) {
+        ConnectionService().send({'type': 'input', 'id': id, 'value': value});
+      }
+    });
+  }
+
+  void _onSkillFailure(Map<String, dynamic> data) {
+    final skillName = data['skill_name'] as String? ?? '';
+    final stepTitle = data['step_title'] as String? ?? '';
+    final reason = data['reason'] as String? ?? '';
+    final toolName = data['tool_name'] as String? ?? '';
+    final failureReport = data['failure_report'] as String? ?? '';
+    final isDeviation = reason == 'unexpected_tool';
+    // 使用 Get.dialog 显示结构化报告
+    Get.dialog(
+      SkillFailureDialog(
+        skillName: skillName,
+        stepTitle: stepTitle,
+        toolName: toolName,
+        failureReport: failureReport,
+        isDeviation: isDeviation,
+      ),
+      barrierDismissible: true,
+    );
+  }
+
+  void _onSudoPrompt(Map<String, dynamic> data) {
+    final id = data['id'] as String? ?? '';
+    final prompt = data['prompt'] as String? ?? '';
+    if (id.isEmpty) return;
+    // 弹出密码输入 Dialog，用户提交后发 sudo_input
+    Get.dialog<String>(
+      SudoPromptDialog(promptText: prompt),
+      barrierDismissible: false,
+    ).then((password) {
+      if (password != null && password.isNotEmpty) {
+        respondSudoPassword(id, password);
+      }
+    });
+  }
+
+  // ── ask_user 公共回复 API ──────────────────────────────────────────────────
+
+  /// 用户回答了 ask_user 问题（内部主要由 Get.dialog .then 处理，这里仅供外部调用）
+  void respondAskUser(String id, String value) {
+    if (pendingAskUser.value?.id != id) return;
+    pendingAskUser.value = null;
+    ConnectionService().send({'type': 'input', 'id': id, 'value': value});
+  }
+
+  /// 用户取消了 ask_user（告知桌面端取消，以 empty string 代表）
+  void cancelAskUser(String id) {
+    if (pendingAskUser.value?.id != id) return;
+    pendingAskUser.value = null;
+    ConnectionService().send({'type': 'input', 'id': id, 'value': ''});
+  }
+
+  /// 提交 sudo 密码给桌面端
+  void respondSudoPassword(String id, String password) {
+    ConnectionService()
+        .send({'type': 'sudo_input', 'id': id, 'password': password});
+  }
+
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (scrollController.hasClients) {
@@ -295,6 +409,11 @@ class ChatLogic extends GetxController {
   void setSkill(String? name) {
     pendingSkill.value = name;
     ConnectionService().send({'type': 'set_skill', 'name': name ?? ''});
+  }
+
+  /// 将 sudo 密码推送到桌面端写入其本地存储
+  void setSudoPasswordSetting(String password) {
+    ConnectionService().send({'type': 'set_sudo_password', 'password': password});
   }
 
   /// 向桌面端 HTTP /skills 接口拉取已安装 Skill 列表。

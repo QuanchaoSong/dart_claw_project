@@ -25,8 +25,10 @@ class UserBubbleView extends StatelessWidget {
             bottomRight: Radius.circular(16),
           ),
         ),
-        child: SelectableText(msg.content,
-            style: const TextStyle(color: Colors.white, fontSize: 14)),
+        child: SelectableText(
+            msg.content,
+            selectionColor: Colors.white.withOpacity(0.35),
+            style: const TextStyle(color: Colors.white, fontSize: 14),),
       ),
     );
   }

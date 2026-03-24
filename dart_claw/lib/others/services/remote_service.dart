@@ -268,14 +268,29 @@ class RemoteService {
     }
   }
 
+  Map<String, dynamic> _buildSessionStats() {
+    try {
+      final h = Get.find<HomeLogic>();
+      return {
+        'type': 'session_stats',
+        'total_tokens': h.sessionTotalTokens.value,
+        'model_id': h.currentModelId,
+      };
+    } catch (_) {
+      return {'type': 'session_stats'};
+    }
+  }
+
   void _addClient(WebSocket ws) {
     _clients.add(ws);
     connectedCount.value = _clients.length;
     print('[RemoteService] Client connected (total: ${_clients.length})');
     // 立即发一个 ping，确认链路畅通
     _send(ws, {'type': 'ping'});
-    // 推送当前设置状态，让手机端 Info 面板初始值与桌面一致
+    // 推送当前设置状态
     _send(ws, _buildSettingsState());
+    // 推送当前模型和 token 统计
+    _send(ws, _buildSessionStats());
     ws.listen(
       (data) => _handleMessage(ws, data as String),
       onDone: () => _removeClient(ws),
@@ -339,6 +354,17 @@ class RemoteService {
       case 'set_skill':
         final name = msg['name'] as String?;
         Get.find<HomeLogic>().setPendingSkill(name?.isEmpty == true ? null : name);
+        break;
+      case 'sudo_input':
+        final id = msg['id'] as String? ?? '';
+        final password = msg['password'] as String?;
+        if (id.isNotEmpty) {
+          Get.find<HomeLogic>().respondSudoPassword(id, password);
+        }
+        break;
+      case 'set_sudo_password':
+        final pwd = msg['password'] as String? ?? '';
+        Get.find<HomeLogic>().setSudoPassword(pwd);
         break;
       default:
         print('[RemoteService] Unknown message type: ${msg['type']}');
