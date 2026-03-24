@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-import '../../../others/model/remote_message_info.dart';
+import '../model/remote_message_info.dart';
 import '../chat_logic.dart';
 import 'claw_chat_item_cell.dart';
 import 'claw_chat_item_subviews/confirm_card_view.dart';

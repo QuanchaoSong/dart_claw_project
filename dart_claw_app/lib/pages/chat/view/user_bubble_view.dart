@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../others/constants/color_constants.dart';
-import '../../../others/model/remote_message_info.dart';
+import '../model/remote_message_info.dart';
 
 class UserBubbleView extends StatelessWidget {
   const UserBubbleView({super.key, required this.msg});

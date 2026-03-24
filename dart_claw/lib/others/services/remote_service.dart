@@ -90,6 +90,11 @@ class RemoteService {
       await _serveVideo(request);
       return;
     }
+    // ── Skill 列表 (/skills) ──────────────────────────────────────────────
+    if (request.uri.path == '/skills') {
+      await _serveSkills(request);
+      return;
+    }
     // ── WebSocket 升级 ────────────────────────────────────────────────────
     if (!WebSocketTransformer.isUpgradeRequest(request)) {
       request.response
@@ -102,21 +107,25 @@ class RemoteService {
   }
 
   Future<void> _serveImage(HttpRequest request) async {
-    final path = request.uri.queryParameters['path'] ?? '';
-    if (path.isEmpty) {
+    final rawPath = request.uri.queryParameters['path'] ?? '';
+    if (rawPath.isEmpty) {
       request.response
         ..statusCode = HttpStatus.badRequest
         ..close();
       return;
     }
     // 仅允许图片扩展名，防止任意文件读取
-    final ext = path.split('.').last.toLowerCase();
+    final ext = rawPath.split('.').last.toLowerCase();
     if (!_imageExtensions.contains(ext)) {
       request.response
         ..statusCode = HttpStatus.forbidden
         ..close();
       return;
     }
+    // Expand leading ~ — Dart's File does not do shell tilde expansion.
+    final path = rawPath.startsWith('~/')
+        ? (Platform.environment['HOME'] ?? '') + rawPath.substring(1)
+        : rawPath;
     final file = File(path);
     if (!await file.exists()) {
       request.response
@@ -141,20 +150,24 @@ class RemoteService {
   }
 
   Future<void> _serveVideo(HttpRequest request) async {
-    final path = request.uri.queryParameters['path'] ?? '';
-    if (path.isEmpty) {
+    final rawPath = request.uri.queryParameters['path'] ?? '';
+    if (rawPath.isEmpty) {
       request.response
         ..statusCode = HttpStatus.badRequest
         ..close();
       return;
     }
-    final ext = path.split('.').last.toLowerCase();
+    final ext = rawPath.split('.').last.toLowerCase();
     if (!_videoExtensions.contains(ext)) {
       request.response
         ..statusCode = HttpStatus.forbidden
         ..close();
       return;
     }
+    // Expand leading ~ — Dart's File does not do shell tilde expansion.
+    final path = rawPath.startsWith('~/')
+        ? (Platform.environment['HOME'] ?? '') + rawPath.substring(1)
+        : rawPath;
     final file = File(path);
     if (!await file.exists()) {
       request.response
@@ -216,12 +229,53 @@ class RemoteService {
     }
   }
 
+  // ── Skill 列表服务（GET /skills）─────────────────────────────────────────
+
+  Future<void> _serveSkills(HttpRequest request) async {
+    try {
+      final skills = await Get.find<HomeLogic>().loadAvailableSkills();
+      final json = jsonEncode(
+        skills.map((s) => {'name': s.name, 'description': s.description}).toList(),
+      );
+      request.response
+        ..statusCode = HttpStatus.ok
+        ..headers.set('Content-Type', 'application/json; charset=utf-8')
+        ..headers.set('Access-Control-Allow-Origin', '*')
+        ..write(json);
+    } catch (_) {
+      request.response
+        ..statusCode = HttpStatus.ok
+        ..headers.set('Content-Type', 'application/json')
+        ..write('[]');
+    }
+    await request.response.close();
+  }
+
+  // ── 初始设置状态快照（推送给新连接的移动端）────────────────────────────────
+
+  Map<String, dynamic> _buildSettingsState() {
+    try {
+      final h = Get.find<HomeLogic>();
+      return {
+        'type': 'settings_state',
+        'allow_all_tools': h.allowAllTools.value,
+        'allow_tool_deviation': h.allowToolDeviation.value,
+        'auto_fill_sudo': h.autoFillSudoPassword.value,
+        'pending_skill': h.pendingSkillName.value,
+      };
+    } catch (_) {
+      return {'type': 'settings_state'};
+    }
+  }
+
   void _addClient(WebSocket ws) {
     _clients.add(ws);
     connectedCount.value = _clients.length;
     print('[RemoteService] Client connected (total: ${_clients.length})');
     // 立即发一个 ping，确认链路畅通
     _send(ws, {'type': 'ping'});
+    // 推送当前设置状态，让手机端 Info 面板初始值与桌面一致
+    _send(ws, _buildSettingsState());
     ws.listen(
       (data) => _handleMessage(ws, data as String),
       onDone: () => _removeClient(ws),
@@ -276,6 +330,15 @@ class RemoteService {
         break;
       case 'stop':
         Get.find<HomeLogic>().stopAgent();
+        break;
+      case 'set_setting':
+        final key = msg['key'] as String? ?? '';
+        final value = msg['value'];
+        if (key.isNotEmpty) Get.find<HomeLogic>().applyRemoteSetting(key, value);
+        break;
+      case 'set_skill':
+        final name = msg['name'] as String?;
+        Get.find<HomeLogic>().setPendingSkill(name?.isEmpty == true ? null : name);
         break;
       default:
         print('[RemoteService] Unknown message type: ${msg['type']}');

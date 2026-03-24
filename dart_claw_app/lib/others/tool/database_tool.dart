@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
-import '../model/chat_session_info.dart';
-import '../model/remote_message_info.dart';
+import '../../../pages/chat/model/chat_session_info.dart';
+import '../../../pages/chat/model/remote_message_info.dart';
 
 class DatabaseTool {
   static final _instance = DatabaseTool._();

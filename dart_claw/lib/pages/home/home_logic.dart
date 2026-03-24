@@ -115,6 +115,18 @@ class HomeLogic extends GetxController {
     allowAllTools.value = value;
   }
 
+  /// 手机端通过 WS 下发设置变更时调用。
+  void applyRemoteSetting(String key, dynamic value) {
+    switch (key) {
+      case 'allow_all_tools':
+        if (value is bool) allowAllTools.value = value;
+      case 'allow_tool_deviation':
+        if (value is bool) allowToolDeviation.value = value;
+      case 'auto_fill_sudo':
+        if (value is bool) autoFillSudoPassword.value = value;
+    }
+  }
+
   // ─── Session 状态 ────────────────────────────────────────────────────────
 
   /// 所有历史 session（供侧边栏使用）

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../others/model/remote_message_info.dart';
+import '../model/remote_message_info.dart';
 import 'claw_chat_item_subviews/content_bubble_view.dart';
 import 'claw_chat_item_subviews/reasoning_block_view.dart';
 import 'loading_dots.dart';

@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-import '../../others/model/chat_session_info.dart';
-import '../../others/model/remote_message_info.dart';
+import 'model/chat_session_info.dart';
+import 'model/remote_message_info.dart';
+import 'model/skill_item_info.dart';
 import '../../others/services/connection_service.dart';
 import '../../others/tool/database_tool.dart';
 
@@ -16,6 +19,15 @@ class ChatLogic extends GetxController {
   final isRunning = false.obs;
   final messages = <RemoteMessageInfo>[].obs;
   final sessions = <ChatSessionInfo>[].obs;
+
+  // ── 桌面端设置镜像（通过 WS settings_state 同步）────────────────────────
+  final allowAllTools = false.obs;
+  final allowToolDeviation = true.obs;
+  final autoFillSudo = false.obs;
+  final pendingSkill = Rxn<String>();
+
+  /// 从桌面端获取的已安装 Skill 列表（按需拉取，内存缓存）
+  final availableSkills = <SkillItemInfo>[].obs;
 
   StreamSubscription<Map<String, dynamic>>? _sub;
   String? _streamingMsgId;
@@ -62,6 +74,8 @@ class ChatLogic extends GetxController {
         _onDone();
       case 'error':
         _onError(msg['message'] as String? ?? '未知错误');
+      case 'settings_state':
+        _onSettingsState(msg);
       case 'log':
         break;
     }
@@ -183,6 +197,19 @@ class ChatLogic extends GetxController {
     }
   }
 
+  void _onSettingsState(Map<String, dynamic> data) {
+    if (data['allow_all_tools'] is bool) {
+      allowAllTools.value = data['allow_all_tools'] as bool;
+    }
+    if (data['allow_tool_deviation'] is bool) {
+      allowToolDeviation.value = data['allow_tool_deviation'] as bool;
+    }
+    if (data['auto_fill_sudo'] is bool) {
+      autoFillSudo.value = data['auto_fill_sudo'] as bool;
+    }
+    pendingSkill.value = data['pending_skill'] as String?;
+  }
+
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (scrollController.hasClients) {
@@ -248,6 +275,51 @@ class ChatLogic extends GetxController {
   void stopRunning() {
     isRunning.value = false;
     ConnectionService().send({'type': 'stop'});
+  }
+
+  // ── 设置同步 ───────────────────────────────────────────────────────────────
+
+  void setSetting(String key, dynamic value) {
+    ConnectionService().send({'type': 'set_setting', 'key': key, 'value': value});
+    // 乐观更新本地状态
+    switch (key) {
+      case 'allow_all_tools':
+        if (value is bool) allowAllTools.value = value;
+      case 'allow_tool_deviation':
+        if (value is bool) allowToolDeviation.value = value;
+      case 'auto_fill_sudo':
+        if (value is bool) autoFillSudo.value = value;
+    }
+  }
+
+  void setSkill(String? name) {
+    pendingSkill.value = name;
+    ConnectionService().send({'type': 'set_skill', 'name': name ?? ''});
+  }
+
+  /// 向桌面端 HTTP /skills 接口拉取已安装 Skill 列表。
+  Future<void> fetchSkills() async {
+    if (!ConnectionService().isConnected.value) return;
+    final host = ConnectionService().serverHost.value;
+    final port = ConnectionService().serverPort.value;
+    try {
+      final client = HttpClient();
+      client.connectionTimeout = const Duration(seconds: 5);
+      final request =
+          await client.getUrl(Uri.parse('http://$host:$port/skills'));
+      final response = await request.close();
+      final body = await response.transform(const Utf8Decoder()).join();
+      client.close();
+      final list = jsonDecode(body) as List<dynamic>;
+      availableSkills.assignAll(
+        list.map((e) => SkillItemInfo(
+              name: e['name'] as String? ?? '',
+              description: e['description'] as String? ?? '',
+            )),
+      );
+    } catch (_) {
+      // 静默失败；availableSkills 保持上次值
+    }
   }
 
   void newSession() {

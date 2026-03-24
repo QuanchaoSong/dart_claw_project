@@ -5,6 +5,7 @@ import '../sessions/sessions_drawer_view.dart';
 import 'chat_logic.dart';
 import 'view/input_area_view.dart';
 import 'view/message_list_view.dart';
+import 'view/session_info_and_settings_view.dart';
 
 class ChatPage extends StatelessWidget {
   ChatPage({super.key});
@@ -24,6 +25,7 @@ class ChatPage extends StatelessWidget {
         ),
         title: Obx(() => Text(logic.currentSessionTitle.value)),
         actions: [
+          // 停止按钮：仅在运行中显示，位于 Info 按钮左侧
           Obx(() => logic.isRunning.value
               ? IconButton(
                   icon: const Icon(Icons.stop_circle_outlined,
@@ -32,6 +34,12 @@ class ChatPage extends StatelessWidget {
                   onPressed: logic.stopRunning,
                 )
               : const SizedBox.shrink()),
+          // Info 面板入口：始终显示在最右侧
+          IconButton(
+            icon: const Icon(Icons.info_outline_rounded, color: Colors.white54),
+            tooltip: 'Session Info',
+            onPressed: () => showSessionInfoAndSettingsView(context),
+          ),
         ],
       ),
       body: Column(

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../others/model/remote_message_info.dart';
+import '../../model/remote_message_info.dart';
 import 'chart_card_view.dart';
 import 'video_card_view.dart';
 

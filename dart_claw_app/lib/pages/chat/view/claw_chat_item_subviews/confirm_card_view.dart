@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../others/constants/color_constants.dart';
-import '../../../../others/model/remote_message_info.dart';
+import '../../model/remote_message_info.dart';
 import '../../chat_logic.dart';
 
 class ConfirmCardView extends StatelessWidget {
