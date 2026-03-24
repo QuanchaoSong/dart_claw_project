@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 /// 移动端消息模型（不依赖 dart_claw_core）。
 enum RemoteMessageInfoType { user, assistant, tool, confirm, log }
 
@@ -20,14 +22,28 @@ class RemoteMessageInfo {
   /// 工具状态：pending / running / success / error / awaitingConfirmation
   String toolStatus;
 
-  /// show_image 工具的图片 URL 列表（已由桌面端转换为手机可访问的地址）
-  List<String> imagePaths = [];
+  /// 工具调用的原始 args（tool 类型专用，持久化为 JSON）。
+  /// show_image / show_video / show_chart 等多媒体数据均从此派生。
+  Map<String, dynamic>? toolArgs;
 
-  /// show_video 工具的视频 URL（已由桌面端转换为手机可访问的地址）
-  String? videoUrl;
+  // ── 从 toolArgs 派生的便捷 getters ──────────────────────────────────────
 
-  /// show_chart 工具的图表数据（原始 args：type / title / x_label / y_label / series）
-  Map<String, dynamic>? chartData;
+  List<String> get imagePaths {
+    if (toolName != 'show_image') return const [];
+    final p = toolArgs?['paths'];
+    return p is List ? p.cast<String>() : const [];
+  }
+
+  String? get videoUrl {
+    if (toolName != 'show_video') return null;
+    final p = toolArgs?['path'];
+    return p is String && p.isNotEmpty ? p : null;
+  }
+
+  Map<String, dynamic>? get chartData {
+    if (toolName != 'show_chart') return null;
+    return toolArgs;
+  }
 
   /// 确认请求 ID（confirm 类型专用）
   String? confirmId;
@@ -42,12 +58,10 @@ class RemoteMessageInfo {
     this.toolName,
     this.toolId,
     this.toolStatus = 'running',
+    this.toolArgs,
     this.confirmId,
     this.isStreaming = false,
-    List<String>? imagePaths,
-    this.videoUrl,
-    this.chartData,
-  }) : imagePaths = imagePaths ?? [];
+  });
 
   static String _newId() {
     final t = DateTime.now().microsecondsSinceEpoch;
@@ -71,33 +85,16 @@ class RemoteMessageInfo {
     required String toolName,
     required String toolStatus,
     Map<String, dynamic>? args,
-  }) {
-    final paths = <String>[];
-    if (toolName == 'show_image' && args != null) {
-      final p = args['paths'];
-      if (p is List) paths.addAll(p.cast<String>());
-    }
-    String? videoUrl;
-    if (toolName == 'show_video' && args != null) {
-      final p = args['path'];
-      if (p is String && p.isNotEmpty) videoUrl = p;
-    }
-    Map<String, dynamic>? chartData;
-    if (toolName == 'show_chart' && args != null) {
-      chartData = args;
-    }
-    return RemoteMessageInfo._(
-      id: _newId(),
-      type: RemoteMessageInfoType.tool,
-      toolId: toolId,
-      toolName: toolName,
-      toolStatus: toolStatus,
-      content: _argsPreview(args),
-      imagePaths: paths.isEmpty ? null : paths,
-      videoUrl: videoUrl,
-      chartData: chartData,
-    );
-  }
+  }) =>
+      RemoteMessageInfo._(
+        id: _newId(),
+        type: RemoteMessageInfoType.tool,
+        toolId: toolId,
+        toolName: toolName,
+        toolStatus: toolStatus,
+        content: _argsPreview(args),
+        toolArgs: args,
+      );
 
   factory RemoteMessageInfo.confirm({
     required String confirmId,
@@ -126,6 +123,7 @@ class RemoteMessageInfo {
   /// 从 SQLite 行恢复（保留存储的 id）
   factory RemoteMessageInfo.fromMap(Map<String, dynamic> m) {
     final type = RemoteMessageInfoType.values.byName(m['type'] as String);
+    final rawArgs = m['tool_args'] as String?;
     final info = RemoteMessageInfo._(
       id: m['id'] as String,
       type: type,
@@ -133,9 +131,13 @@ class RemoteMessageInfo {
       toolName: m['tool_name'] as String?,
       toolId: m['tool_id'] as String?,
       toolStatus: m['tool_status'] as String? ?? 'success',
+      toolArgs: rawArgs != null
+          ? jsonDecode(rawArgs) as Map<String, dynamic>
+          : null,
       isStreaming: false,
     );
     info.reasoning = m['reasoning'] as String? ?? '';
     return info;
   }
 }
+

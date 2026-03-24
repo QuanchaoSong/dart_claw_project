@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
@@ -9,7 +11,7 @@ class DatabaseTool {
   factory DatabaseTool() => _instance;
   DatabaseTool._();
 
-  static const _dbVersion = 1;
+  static const _dbVersion = 2;
   static const _dbFileName = 'dart_claw_app.db';
 
   Database? _db;
@@ -26,6 +28,7 @@ class DatabaseTool {
       path,
       version: _dbVersion,
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
   }
 
@@ -49,6 +52,7 @@ class DatabaseTool {
         tool_name   TEXT,
         tool_id     TEXT,
         tool_status TEXT,
+        tool_args   TEXT,
         created_at  INTEGER NOT NULL
       )
     ''');
@@ -56,6 +60,13 @@ class DatabaseTool {
     await db.execute(
       'CREATE INDEX idx_msgs_session ON messages(session_id, created_at)',
     );
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    // 开发阶段直接重建，不考虑数据迁移
+    await db.execute('DROP TABLE IF EXISTS messages');
+    await db.execute('DROP TABLE IF EXISTS sessions');
+    await _onCreate(db, newVersion);
   }
 
   // ─── Session CRUD ──────────────────────────────────────────────────────────
@@ -108,6 +119,7 @@ class DatabaseTool {
         'tool_name': msg.toolName,
         'tool_id': msg.toolId,
         'tool_status': msg.toolStatus,
+        'tool_args': msg.toolArgs == null ? null : jsonEncode(msg.toolArgs),
         'created_at': DateTime.now().millisecondsSinceEpoch,
       },
       conflictAlgorithm: ConflictAlgorithm.replace,

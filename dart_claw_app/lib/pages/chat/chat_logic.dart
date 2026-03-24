@@ -103,22 +103,7 @@ class ChatLogic extends GetxController {
       );
       if (idx != -1) {
         messages[idx].toolStatus = status;
-        // show_image: 成功时更新图片列表（URL 已由桌面端转换完毕）
-        if (name == 'show_image' && args != null) {
-          final p = args['paths'];
-          if (p is List && p.isNotEmpty) {
-            messages[idx].imagePaths = p.cast<String>().toList();
-          }
-        }
-        // show_video: 成功时更新视频 URL（URL 已由桌面端转换完毕）
-        if (name == 'show_video' && args != null) {
-          final p = args['path'];
-          if (p is String && p.isNotEmpty) messages[idx].videoUrl = p;
-        }
-        // show_chart: 成功时存储图表数据
-        if (name == 'show_chart' && args != null) {
-          messages[idx].chartData = args;
-        }
+        if (args != null) messages[idx].toolArgs = args;
         messages.refresh();
         return;
       }
