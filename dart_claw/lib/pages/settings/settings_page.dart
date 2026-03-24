@@ -1,6 +1,7 @@
 import 'package:dart_claw/others/constants/color_constants.dart';
 import 'package:dart_claw/pages/settings/settings_logic.dart';
 import 'package:dart_claw/pages/settings/view/settings_ai_models_view.dart';
+import 'package:dart_claw/pages/settings/view/settings_remote_view.dart';
 import 'package:dart_claw/pages/settings/view/settings_scheduler_view.dart';
 import 'package:dart_claw/pages/settings/view/settings_sessions_view.dart';
 import 'package:dart_claw/pages/settings/view/settings_skills_view.dart';
@@ -121,6 +122,13 @@ class SettingsPage extends StatelessWidget {
             Icons.schedule_outlined,
             'Scheduler',
           ),
+          const SizedBox(height: 4),
+          _buildNavItem(
+            logic,
+            SettingsSection.remote,
+            Icons.phone_iphone_rounded,
+            'Remote',
+          ),
         ],
       ),
     );
@@ -221,8 +229,8 @@ class SettingsPage extends StatelessWidget {
       case SettingsSection.skills:
         return const SettingsSkillsView();
       case SettingsSection.scheduler:
-        return const SettingsSchedulerView();
-    }
+        return const SettingsSchedulerView();      case SettingsSection.remote:
+        return const SettingsRemoteView();    }
   }
 
   // ─────────────────────────────────────────────────
@@ -255,8 +263,9 @@ class SettingsPage extends StatelessWidget {
             ],
           );
         }
-        // Scheduler 页面不需要 footer 按钮
-        if (logic.currentSection.value == SettingsSection.scheduler) {
+        // Scheduler 和 Remote 页面不需要 footer 按鈕
+        if (logic.currentSection.value == SettingsSection.scheduler ||
+            logic.currentSection.value == SettingsSection.remote) {
           return const SizedBox.shrink();
         }
         return Row(

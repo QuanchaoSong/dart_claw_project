@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'dart:io';
 
-enum SettingsSection { model, session, skills, scheduler }
+enum SettingsSection { model, session, skills, scheduler, remote }
 
 class SettingsLogic extends GetxController {
   final currentSection = SettingsSection.model.obs;

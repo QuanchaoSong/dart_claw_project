@@ -54,6 +54,7 @@ class HomeLogic extends GetxController {
   void onInit() {
     super.onInit();
     _initDb();
+    loadUploadSaveDir();
   }
 
   @override
@@ -644,6 +645,7 @@ class HomeLogic extends GetxController {
         ShowChartTool(),
         ShowVideoTool(),
         ShowFileTool(),
+        RequestFileTool(onRequest: _requestFileFromMobile),
         ScreenshotTool(),
         MouseMoveTool(),
         MouseClickTool(),
@@ -804,6 +806,61 @@ class HomeLogic extends GetxController {
   /// 移动端通过 Info 面板设置 sudo 密码（写入桌面本地存储）
   void setSudoPassword(String password) {
     sudoPasswordController.text = password;
+  }
+
+  // ─── 手机→桌面 文件上传 ────────────────────────────────────────────────────
+
+  /// 移动端上传文件的保存目录（支持 ~/... 展开）
+  final uploadSaveDir = '~/Downloads'.obs;
+
+  static String get _uploadDirFilePath =>
+      '${Platform.environment['HOME'] ?? ''}/.dart_claw/upload_dir.txt';
+
+  /// 从持久化文件中恢复上次设置的目录
+  void loadUploadSaveDir() {
+    try {
+      final f = File(_uploadDirFilePath);
+      if (f.existsSync()) {
+        final saved = f.readAsStringSync().trim();
+        if (saved.isNotEmpty) uploadSaveDir.value = saved;
+      }
+    } catch (_) {}
+  }
+
+  /// 更改上传目录并持久化
+  void setUploadSaveDir(String dir) {
+    uploadSaveDir.value = dir;
+    try {
+      final f = File(_uploadDirFilePath);
+      f.parent.createSync(recursive: true);
+      f.writeAsStringSync(dir);
+    } catch (_) {}
+  }
+
+  // ─── AI 主动请求文件（request_file 工具）────────────────────────────────────
+
+  final _pendingFileRequestCompleters = <String, Completer<String?>>{};
+
+  /// RequestFileTool 回调：向移动端广播 request_file 请求，等待文件上传后返回路径。
+  Future<String?> _requestFileFromMobile(String prompt) {
+    final requestId = _newId();
+    final completer = Completer<String?>();
+    _pendingFileRequestCompleters[requestId] = completer;
+    _broadcast({'type': 'request_file', 'id': requestId, 'prompt': prompt});
+    return completer.future;
+  }
+
+  /// 移动端上传完成后（带 request_id 的上传）由 RemoteService 调用。
+  void onFileRequestFulfilled(String requestId, String savedPath) {
+    _pendingFileRequestCompleters.remove(requestId)?.complete(savedPath);
+  }
+
+  /// 文件上传完成后由 RemoteService 调用：显示桌面通知
+  void onFileReceived(String name, String savedPath) {
+    SnackbarTool.showSuccessWithTitle(
+      '文件已接收',
+      '「$name」已保存到 $savedPath',
+    );
   }
 
   // ─── ask_user 内联卡片（Plan B）/ Dialog（Plan A）───────────────────────────

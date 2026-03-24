@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -30,6 +31,14 @@ class ChatLogic extends GetxController {
   final autoFillSudo = false.obs;
   final pendingSkill = Rxn<String>();
 
+  // ── 手机→桌面文件上传状态 ─────────────────────────────────────────────────
+  final isUploading = false.obs;
+  final uploadProgress = 0.0.obs;
+  final uploadFileName = ''.obs;
+  final uploadError = Rxn<String>();
+  // ── AI 主动请求文件（request_file 工具）────────────────────────────
+  final pendingFileRequestId = Rxn<String>();
+  final pendingFileRequestPrompt = ''.obs;
   // ── 模型和 Token 统计─────────────────────────────────────────────────
   final sessionTokens = 0.obs;
   final sessionModelId = ''.obs;
@@ -95,6 +104,8 @@ class ChatLogic extends GetxController {
         _onSkillFailure(msg);
       case 'sudo_prompt':
         _onSudoPrompt(msg);
+      case 'request_file':
+        _onRequestFile(msg);
       case 'log':
         break;
     }
@@ -287,6 +298,14 @@ class ChatLogic extends GetxController {
     );
   }
 
+  void _onRequestFile(Map<String, dynamic> data) {
+    final id = data['id'] as String? ?? '';
+    final prompt = data['prompt'] as String? ?? '请选择一个文件上传';
+    if (id.isEmpty) return;
+    pendingFileRequestId.value = id;
+    pendingFileRequestPrompt.value = prompt;
+  }
+
   void _onSudoPrompt(Map<String, dynamic> data) {
     final id = data['id'] as String? ?? '';
     final prompt = data['prompt'] as String? ?? '';
@@ -340,6 +359,12 @@ class ChatLogic extends GetxController {
 
   void submitInput() {
     final text = inputController.text.trim();
+    // 如果用户输入 /file 命令，弹出文件选择器
+    if (text == '/file') {
+      inputController.clear();
+      pickAndUploadFile();
+      return;
+    }
     if (text.isEmpty || isRunning.value) return;
     inputController.clear();
 
@@ -414,6 +439,98 @@ class ChatLogic extends GetxController {
   /// 将 sudo 密码推送到桌面端写入其本地存储
   void setSudoPasswordSetting(String password) {
     ConnectionService().send({'type': 'set_sudo_password', 'password': password});
+  }
+
+  // ── 手机→桌面 文件上传 ─────────────────────────────────────────────────────
+
+  /// 弹出系统文件选择器，选定后流式上传到桌面端（普通上传，无 request_id）。
+  Future<void> pickAndUploadFile() => _doPickAndUpload();
+
+  /// AI 主动请求时由横幅提示中的「选择文件」按鈕触发。
+  Future<void> pickAndUploadFileForRequest(String requestId) async {
+    pendingFileRequestId.value = null; // 隐藏 banner
+    await _doPickAndUpload(requestId: requestId);
+  }
+
+  /// 用户关闭了 AI 文件请求 banner。
+  void cancelFileRequest() {
+    pendingFileRequestId.value = null;
+  }
+
+  Future<void> _doPickAndUpload({String? requestId}) async {
+    if (!ConnectionService().isConnected.value) return;
+
+    FilePickerResult? result;
+    try {
+      result = await FilePicker.platform.pickFiles(
+        type: FileType.any,
+        allowMultiple: false,
+        withData: false,
+      );
+    } catch (_) {
+      return; // 用户取消选择
+    }
+    if (result == null || result.files.isEmpty) return;
+    final picked = result.files.first;
+    final filePath = picked.path;
+    if (filePath == null) return;
+
+    final fileName = picked.name;
+    final fileSize = picked.size; // bytes
+
+    uploadFileName.value = fileName;
+    uploadError.value = null;
+    isUploading.value = true;
+    uploadProgress.value = 0;
+
+    try {
+      final host = ConnectionService().serverHost.value;
+      final port = ConnectionService().serverPort.value;
+      final requestIdParam =
+          requestId != null ? '&request_id=${Uri.encodeComponent(requestId)}' : '';
+      final uri = Uri.parse(
+          'http://$host:$port/upload?name=${Uri.encodeComponent(fileName)}$requestIdParam');
+
+      final client = HttpClient();
+      client.connectionTimeout = const Duration(seconds: 10);
+      final req = await client.postUrl(uri);
+      req.headers
+        ..set('Content-Type', 'application/octet-stream')
+        ..set('Content-Length', fileSize.toString());
+
+      // 流式读取，实时计算上传进度
+      int sent = 0;
+      await for (final chunk in File(filePath).openRead()) {
+        req.add(chunk);
+        sent += chunk.length;
+        if (fileSize > 0) {
+          uploadProgress.value = (sent / fileSize).clamp(0.0, 1.0);
+        }
+      }
+
+      final response = await req.close();
+      client.close();
+
+      if (response.statusCode == 200) {
+        final body = await response.transform(const Utf8Decoder()).join();
+        final json = jsonDecode(body) as Map<String, dynamic>;
+        if (json['ok'] == true) {
+          uploadProgress.value = 1.0;
+          messages.add(RemoteMessageInfo.log('📎 已传输到桌面端：$fileName'));
+          _scrollToBottom();
+        } else {
+          uploadError.value = '上传失败';
+        }
+      } else {
+        uploadError.value = '上传失败 (${response.statusCode})';
+      }
+    } on SocketException {
+      uploadError.value = '无法连接到桌面端';
+    } catch (_) {
+      uploadError.value = '上传错误';
+    } finally {
+      isUploading.value = false;
+    }
   }
 
   /// 向桌面端 HTTP /skills 接口拉取已安装 Skill 列表。

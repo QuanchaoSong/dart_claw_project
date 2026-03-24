@@ -104,7 +104,13 @@ class RemoteService {
     if (request.uri.path == '/file') {
       await _serveFile(request);
       return;
-    }    // ── WebSocket 升级 ────────────────────────────────────────────────────
+    }
+    // ── 手机→桌面文件上传 (POST /upload?name=...) ─────────────────────────────
+    if (request.uri.path == '/upload') {
+      await _handleUpload(request);
+      return;
+    }
+    // ── WebSocket 升级 ────────────────────────────────────────────────────
     if (!WebSocketTransformer.isUpgradeRequest(request)) {
       request.response
         ..statusCode = HttpStatus.badRequest
@@ -302,6 +308,66 @@ class RemoteService {
       ..set('Content-Length', fileSize.toString())
       ..set('Access-Control-Allow-Origin', '*');
     await request.response.addStream(file.openRead());
+    await request.response.close();
+  }
+
+  // ── 手机→桌面文件上传 (POST /upload?name=...) ────────────────────────────
+
+  Future<void> _handleUpload(HttpRequest request) async {
+    if (request.method.toUpperCase() != 'POST') {
+      request.response
+        ..statusCode = HttpStatus.methodNotAllowed
+        ..close();
+      return;
+    }
+    // 从 query param 取文件名，做安全校验防止路径穿越攻击
+    final rawName = request.uri.queryParameters['name'] ?? '';
+    if (rawName.isEmpty) {
+      request.response
+        ..statusCode = HttpStatus.badRequest
+        ..close();
+      return;
+    }
+    // 仅保留安全字符：字母、数字、下划线、连字符、点
+    final safeName = rawName.replaceAll(RegExp(r'[^\w.\-]'), '_');
+    if (safeName.contains('..') || safeName.startsWith('.')) {
+      request.response
+        ..statusCode = HttpStatus.badRequest
+        ..close();
+      return;
+    }
+
+    // 提取可选的 request_id（AI 主动请求文件时由移动端附带）
+    final requestId = request.uri.queryParameters['request_id'] ?? '';
+
+    final homeLogic = Get.find<HomeLogic>();
+    final rawDir = homeLogic.uploadSaveDir.value;
+    final saveDir = rawDir.startsWith('~/')
+        ? (Platform.environment['HOME'] ?? '') + rawDir.substring(1)
+        : rawDir;
+    await Directory(saveDir).create(recursive: true);
+
+    // 流式写入，不占内存
+    final dest = File('$saveDir/$safeName');
+    final sink = dest.openWrite();
+    await sink.addStream(request);
+    await sink.close();
+
+    final savedPath = dest.path;
+
+    // 通知桌面端
+    if (requestId.isNotEmpty) {
+      // AI 发起的请求：完成 Completer（工具返回路径）
+      homeLogic.onFileRequestFulfilled(requestId, savedPath);
+    }
+    homeLogic.onFileReceived(safeName, savedPath);
+
+    // 响应移动端
+    request.response
+      ..statusCode = HttpStatus.ok
+      ..headers.set('Content-Type', 'application/json; charset=utf-8')
+      ..headers.set('Access-Control-Allow-Origin', '*')
+      ..write(jsonEncode({'ok': true, 'path': savedPath, 'name': safeName}));
     await request.response.close();
   }
 
