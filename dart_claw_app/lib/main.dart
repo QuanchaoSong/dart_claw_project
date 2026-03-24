@@ -67,7 +67,7 @@ class MyApp extends StatelessWidget {
           labelStyle: const TextStyle(color: Colors.white38),
         ),
       ),
-      home: const ConnectionPage(),
+      home: ConnectionPage(),
     );
   }
 }

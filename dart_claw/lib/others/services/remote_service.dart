@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:dart_claw/others/services/app_config_service.dart';
 import 'package:dart_claw/pages/home/home_logic.dart';
 import 'package:get/get.dart';
 
@@ -23,19 +24,58 @@ class RemoteService {
   final _clients = <WebSocket>{};
   String? _localIp;
 
-  /// 当前已连接的移动端数量（可响应式绑定到 UI）。
+  /// 当前已连接的移动端数量
   final connectedCount = 0.obs;
+  /// 服务器是否正在运行
+  final isRunning = false.obs;
+  /// 当前监听的端口号
+  final activePort = RemoteService.defaultPort.obs;
+  /// 桌面端的局域网 IP（供二维码使用）
+  final localIpAddress = ''.obs;
+  /// 连接模式：'direct'（同一 WiFi 直连）| 'relay'（中继，暂未实现）
+  final connectionMode = 'direct'.obs;
+  /// 启动失败时的错误描述
+  final startError = Rxn<String>();
 
   Timer? _pingTimer;
 
+  void setConnectionMode(String mode) {
+    connectionMode.value = mode;
+    AppConfigService.shared.saveServerSettings(
+      AppConfigService.shared.config.value.server.copyWith(connectionMode: mode),
+    );
+  }
+
   // ── 生命周期 ──────────────────────────────────────────────────────────────
 
-  Future<void> start({int port = defaultPort}) async {
-    _server = await HttpServer.bind(InternetAddress.anyIPv4, port);
-    _localIp = await _resolveLocalIp();
-    _server!.listen(_handleRequest);
-    _startPingTimer();
-    print('[RemoteService] Listening on ws://0.0.0.0:$port (LAN IP: $_localIp)');
+  Future<void> start({int? port}) async {
+    startError.value = null;
+    try {
+      final cfg = AppConfigService.shared.config.value.server;
+      final p = port ?? cfg.port;
+      connectionMode.value = cfg.connectionMode;
+      _server = await HttpServer.bind(InternetAddress.anyIPv4, p);
+      activePort.value = p;
+      _localIp = await _resolveLocalIp();
+      localIpAddress.value = _localIp ?? '127.0.0.1';
+      _server!.listen(_handleRequest);
+      _startPingTimer();
+      isRunning.value = true;
+      print('[RemoteService] Listening on ws://0.0.0.0:$p (LAN IP: $_localIp)');
+    } catch (e) {
+      isRunning.value = false;
+      startError.value = '服务器启动失败：$e';
+      rethrow;
+    }
+  }
+
+  /// 切换端口（先停止再重启）。
+  Future<void> restart(int port) async {
+    await stop();
+    await AppConfigService.shared.saveServerSettings(
+      AppConfigService.shared.config.value.server.copyWith(port: port),
+    );
+    await start(port: port);
   }
 
   Future<String> _resolveLocalIp() async {
@@ -53,22 +93,19 @@ class RemoteService {
   /// 网络 URL 原样返回。
   String imageUrl(String path) {
     if (path.startsWith('http://') || path.startsWith('https://')) return path;
-    final ip = _localIp ?? '127.0.0.1';
-    return 'http://$ip:$defaultPort/image?path=${Uri.encodeComponent(path)}';
+    return 'http://${localIpAddress.value}:${activePort.value}/image?path=${Uri.encodeComponent(path)}';
   }
 
   /// 将桌面本地视频路径转为手机可访问的 HTTP URL。
   /// 网络 URL 原样返回。
   String videoUrl(String path) {
     if (path.startsWith('http://') || path.startsWith('https://')) return path;
-    final ip = _localIp ?? '127.0.0.1';
-    return 'http://$ip:$defaultPort/video?path=${Uri.encodeComponent(path)}';
+    return 'http://${localIpAddress.value}:${activePort.value}/video?path=${Uri.encodeComponent(path)}';
   }
 
   /// 将桌面本地文件路径转为手机可下载的 HTTP URL。
   String fileUrl(String path) {
-    final ip = _localIp ?? '127.0.0.1';
-    return 'http://$ip:$defaultPort/file?path=${Uri.encodeComponent(path)}';
+    return 'http://${localIpAddress.value}:${activePort.value}/file?path=${Uri.encodeComponent(path)}';
   }
 
   Future<void> stop() async {
@@ -81,6 +118,7 @@ class RemoteService {
     connectedCount.value = 0;
     await _server?.close(force: true);
     _server = null;
+    isRunning.value = false;
   }
 
   // ── 连接处理 ──────────────────────────────────────────────────────────────
@@ -340,8 +378,7 @@ class RemoteService {
     // 提取可选的 request_id（AI 主动请求文件时由移动端附带）
     final requestId = request.uri.queryParameters['request_id'] ?? '';
 
-    final homeLogic = Get.find<HomeLogic>();
-    final rawDir = homeLogic.uploadSaveDir.value;
+    final rawDir = AppConfigService.shared.config.value.server.uploadSaveDir;
     final saveDir = rawDir.startsWith('~/')
         ? (Platform.environment['HOME'] ?? '') + rawDir.substring(1)
         : rawDir;
@@ -356,6 +393,7 @@ class RemoteService {
     final savedPath = dest.path;
 
     // 通知桌面端
+    final homeLogic = Get.find<HomeLogic>();
     if (requestId.isNotEmpty) {
       // AI 发起的请求：完成 Completer（工具返回路径）
       homeLogic.onFileRequestFulfilled(requestId, savedPath);

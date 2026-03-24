@@ -10,6 +10,6 @@ class SettingsLogic extends GetxController {
 
   void disconnect() {
     _conn.disconnect();
-    Get.offAll(() => const ConnectionPage());
+    Get.offAll(() => ConnectionPage());
   }
 }

@@ -15,7 +15,9 @@ void main() async {
   await Get.putAsync(() => AppConfigService().init());
   await DatabaseTool.shared.init();
   await SchedulerService.instance.init();
-  await RemoteService().start();
+  if (AppConfigService.shared.config.value.server.isEnabled) {
+    await RemoteService().start();
+  }
   
   runApp(const MyApp());
 }

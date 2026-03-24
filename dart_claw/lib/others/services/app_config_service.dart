@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:dart_claw/others/model/ai_model_settings_info.dart';
 import 'package:dart_claw/others/model/app_config_info.dart';
+import 'package:dart_claw/others/model/server_settings_info.dart';
 import 'package:dart_claw/others/model/session_settings_info.dart';
 import 'package:get/get.dart';
 import 'package:path/path.dart' as p;
@@ -97,6 +98,11 @@ class AppConfigService extends GetxService {
 
   Future<void> saveSessionSettings(SessionSettingsInfo session) async {
     config.value = config.value.copyWith(session: session);
+    await _writeSettings(config.value);
+  }
+
+  Future<void> saveServerSettings(ServerSettingsInfo server) async {
+    config.value = config.value.copyWith(server: server);
     await _writeSettings(config.value);
   }
 

@@ -1,4 +1,5 @@
 import 'package:dart_claw/others/model/ai_model_settings_info.dart';
+import 'package:dart_claw/others/model/server_settings_info.dart';
 import 'package:dart_claw/others/model/session_settings_info.dart';
 
 /// 顶层 App 配置（聚合所有 settings）
@@ -12,11 +13,13 @@ class AppConfigInfo {
   final Map<AIProvider, AIModelSettingsInfo> providerConfigs;
 
   final SessionSettingsInfo session;
+  final ServerSettingsInfo server;
 
   const AppConfigInfo({
     this.activeProvider = AIProvider.openai,
     this.providerConfigs = const {},
     this.session = const SessionSettingsInfo(),
+    this.server = const ServerSettingsInfo(),
   });
 
   /// 当前激活的模型配置（供业务层直接使用）
@@ -28,11 +31,13 @@ class AppConfigInfo {
     AIProvider? activeProvider,
     Map<AIProvider, AIModelSettingsInfo>? providerConfigs,
     SessionSettingsInfo? session,
+    ServerSettingsInfo? server,
   }) {
     return AppConfigInfo(
       activeProvider: activeProvider ?? this.activeProvider,
       providerConfigs: providerConfigs ?? this.providerConfigs,
       session: session ?? this.session,
+      server: server ?? this.server,
     );
   }
 
@@ -51,6 +56,8 @@ class AppConfigInfo {
       providerConfigs: configs,
       session: SessionSettingsInfo.fromJson(
           json['session'] as Map<String, dynamic>? ?? {}),
+      server: ServerSettingsInfo.fromJson(
+          json['server'] as Map<String, dynamic>? ?? {}),
     );
   }
 
@@ -63,5 +70,6 @@ class AppConfigInfo {
           },
         },
         'session': session.toJson(),
+        'server': server.toJson(),
       };
 }

@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:dart_claw/others/constants/color_constants.dart';
 import 'package:dart_claw/others/services/app_config_service.dart';
 import 'package:dart_claw/others/services/remote_service.dart';
 import 'package:dart_claw/others/tool/snackbar_tool.dart';
@@ -54,7 +53,6 @@ class HomeLogic extends GetxController {
   void onInit() {
     super.onInit();
     _initDb();
-    loadUploadSaveDir();
   }
 
   @override
@@ -810,31 +808,15 @@ class HomeLogic extends GetxController {
 
   // ─── 手机→桌面 文件上传 ────────────────────────────────────────────────────
 
-  /// 移动端上传文件的保存目录（支持 ~/... 展开）
-  final uploadSaveDir = '~/Downloads'.obs;
+  /// 移动端上传文件的保存目录（从 config.json 读取）
+  String get uploadSaveDir =>
+      AppConfigService.shared.config.value.server.uploadSaveDir;
 
-  static String get _uploadDirFilePath =>
-      '${Platform.environment['HOME'] ?? ''}/.dart_claw/upload_dir.txt';
-
-  /// 从持久化文件中恢复上次设置的目录
-  void loadUploadSaveDir() {
-    try {
-      final f = File(_uploadDirFilePath);
-      if (f.existsSync()) {
-        final saved = f.readAsStringSync().trim();
-        if (saved.isNotEmpty) uploadSaveDir.value = saved;
-      }
-    } catch (_) {}
-  }
-
-  /// 更改上传目录并持久化
+  /// 更改上传目录并写入 config.json
   void setUploadSaveDir(String dir) {
-    uploadSaveDir.value = dir;
-    try {
-      final f = File(_uploadDirFilePath);
-      f.parent.createSync(recursive: true);
-      f.writeAsStringSync(dir);
-    } catch (_) {}
+    AppConfigService.shared.saveServerSettings(
+      AppConfigService.shared.config.value.server.copyWith(uploadSaveDir: dir),
+    );
   }
 
   // ─── AI 主动请求文件（request_file 工具）────────────────────────────────────

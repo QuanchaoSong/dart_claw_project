@@ -1,34 +1,139 @@
-import 'package:dart_claw/pages/home/home_logic.dart';
+import 'package:dart_claw/others/services/app_config_service.dart';
+import 'package:dart_claw/others/services/remote_service.dart';
 import 'package:dart_claw/pages/settings/view/common_settings_widgets.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
-/// Settings → Remote 分区
-/// 管理与移动端远程控制相关的持久化设置（不在 session 级别，而是全局配置）。
-class SettingsRemoteView extends StatelessWidget {
+/// Settings → Server 分区
+/// 管理服务器开关、端口、连接方式和文件传输目录。
+class SettingsRemoteView extends StatefulWidget {
   const SettingsRemoteView({super.key});
 
   @override
+  State<SettingsRemoteView> createState() => _SettingsRemoteViewState();
+}
+
+class _SettingsRemoteViewState extends State<SettingsRemoteView> {
+  late final TextEditingController _portController;
+  final _remote = RemoteService();
+
+  @override
+  void initState() {
+    super.initState();
+    _portController =
+        TextEditingController(text: '${_remote.activePort.value}');
+  }
+
+  @override
+  void dispose() {
+    _portController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _applyPort() async {
+    final port = int.tryParse(_portController.text.trim());
+    if (port == null || port <= 1024 || port > 65535) {
+      Get.snackbar('端口无效', '请输入 1025 ~ 65535 之间的整数',
+          backgroundColor: Colors.red.withValues(alpha: 0.8),
+          colorText: Colors.white,
+          snackPosition: SnackPosition.BOTTOM);
+      return;
+    }
+    if (port == _remote.activePort.value) return;
+    await _remote.restart(port);
+    setState(() {
+      _portController.text = '${_remote.activePort.value}';
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final homeLogic = Get.find<HomeLogic>();
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        settingsSectionTitle('File Transfer'),
+        // ── 服务器开关 ────────────────────────────────────────────────────
+        settingsSectionTitle('服务器'),
+        const SizedBox(height: 12),
+        _ServerToggleRow(remote: _remote),
+
+        // ── 连接方式（仅运行时显示）──────────────────────────────────────
+        Obx(() {
+          if (!_remote.isRunning.value) return const SizedBox.shrink();
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 24),
+              settingsSectionTitle('连接方式'),
+              const SizedBox(height: 12),
+              _ConnectionModeRow(remote: _remote),
+            ],
+          );
+        }),
+
+        // ── 端口（仅运行时显示）──────────────────────────────────────────
+        Obx(() {
+          if (!_remote.isRunning.value) return const SizedBox.shrink();
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 24),
+              settingsSectionTitle('端口'),
+              const SizedBox(height: 4),
+              const Text(
+                '修改后点击「应用」，服务器将自动重启。',
+                style: TextStyle(fontSize: 11, color: Colors.white24),
+              ),
+              const SizedBox(height: 10),
+              _PortRow(controller: _portController, onApply: _applyPort),
+            ],
+          );
+        }),
+
+        // ── 二维码（运行中 + 直连模式）───────────────────────────────────
+        Obx(() {
+          if (!_remote.isRunning.value) return const SizedBox.shrink();
+          if (_remote.connectionMode.value != 'direct') {
+            return const SizedBox.shrink();
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 24),
+              settingsSectionTitle('扫码连接'),
+              const SizedBox(height: 12),
+              _QrSection(remote: _remote),
+            ],
+          );
+        }),
+
+        // ── 文件传输（始终显示）──────────────────────────────────────────
+        const SizedBox(height: 24),
+        settingsSectionTitle('文件传输'),
         const SizedBox(height: 8),
         const Text(
           '手机端上传的文件保存目录（支持 ~/... 路径）',
           style: TextStyle(fontSize: 12, color: Colors.white38),
         ),
         const SizedBox(height: 12),
-        Obx(() => _DirPickerRow(
-              path: homeLogic.uploadSaveDir.value,
-              onPick: () async {
-                final dir = await getDirectoryPath();
-                if (dir != null) homeLogic.setUploadSaveDir(dir);
-              },
-            )),
+        Obx(() {
+          final dir =
+              AppConfigService.shared.config.value.server.uploadSaveDir;
+          return _DirPickerRow(
+            path: dir,
+            onPick: () async {
+              final picked = await getDirectoryPath();
+              if (picked != null) {
+                AppConfigService.shared.saveServerSettings(
+                  AppConfigService.shared.config.value.server
+                      .copyWith(uploadSaveDir: picked),
+                );
+              }
+            },
+          );
+        }),
         const SizedBox(height: 6),
         const Text(
           '修改后立即生效，无需保存。',
@@ -36,6 +141,291 @@ class SettingsRemoteView extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+// ── 服务器开关行 ────────────────────────────────────────────────────────────
+
+class _ServerToggleRow extends StatelessWidget {
+  const _ServerToggleRow({required this.remote});
+  final RemoteService remote;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final running = remote.isRunning.value;
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.04),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.wifi_tethering_rounded,
+              size: 18,
+              color: running ? Colors.greenAccent : Colors.white30,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '本地服务',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: running ? Colors.white : Colors.white54,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    running ? '运行中，手机端可连接' : '已停止，手机端无法连接',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: running
+                          ? Colors.greenAccent.withValues(alpha: 0.7)
+                          : Colors.white24,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Switch.adaptive(
+              value: running,
+              activeColor: Colors.greenAccent,
+              onChanged: (v) async {
+                await AppConfigService.shared.saveServerSettings(
+                  AppConfigService.shared.config.value.server
+                      .copyWith(isEnabled: v),
+                );
+                if (v) {
+                  await remote.start();
+                } else {
+                  await remote.stop();
+                }
+              },
+            ),
+          ],
+        ),
+      );
+    });
+  }
+}
+
+// ── 连接方式选择 ────────────────────────────────────────────────────────────
+
+class _ConnectionModeRow extends StatelessWidget {
+  const _ConnectionModeRow({required this.remote});
+  final RemoteService remote;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final mode = remote.connectionMode.value;
+      return Row(
+        children: [
+          Expanded(
+            child: _ModeCard(
+              label: '直连（同一 WiFi）',
+              icon: Icons.wifi_rounded,
+              description: '手机与桌面在同一局域网内',
+              selected: mode == 'direct',
+              disabled: false,
+              onTap: () => remote.setConnectionMode('direct'),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _ModeCard(
+              label: '中继服务器',
+              icon: Icons.cloud_rounded,
+              description: '跨网络访问（即将支持）',
+              selected: mode == 'relay',
+              disabled: true,
+              onTap: null,
+            ),
+          ),
+        ],
+      );
+    });
+  }
+}
+
+class _ModeCard extends StatelessWidget {
+  const _ModeCard({
+    required this.label,
+    required this.icon,
+    required this.description,
+    required this.selected,
+    required this.disabled,
+    this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final String description;
+  final bool selected;
+  final bool disabled;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final bgColor = disabled
+        ? Colors.transparent
+        : selected
+            ? const Color(0xFF6C63FF).withValues(alpha: 0.18)
+            : Colors.white.withValues(alpha: 0.04);
+    final borderColor = disabled
+        ? Colors.white.withValues(alpha: 0.06)
+        : selected
+            ? const Color(0xFF6C63FF).withValues(alpha: 0.5)
+            : Colors.white.withValues(alpha: 0.08);
+    final textColor =
+        disabled ? Colors.white24 : (selected ? Colors.white : Colors.white54);
+
+    return GestureDetector(
+      onTap: disabled ? null : onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: borderColor),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 18, color: textColor),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: textColor),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              description,
+              style: TextStyle(
+                  fontSize: 11,
+                  color: disabled ? Colors.white12 : Colors.white24),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── 端口设置行 ──────────────────────────────────────────────────────────────
+
+class _PortRow extends StatelessWidget {
+  const _PortRow({required this.controller, required this.onApply});
+  final TextEditingController controller;
+  final VoidCallback onApply;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: settingsTextField(
+            controller: controller,
+            hintText: '37788',
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          ),
+        ),
+        const SizedBox(width: 10),
+        GestureDetector(
+          onTap: onApply,
+          child: Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.07),
+              borderRadius: BorderRadius.circular(8),
+              border:
+                  Border.all(color: Colors.white.withValues(alpha: 0.12)),
+            ),
+            child: const Text(
+              '应用',
+              style: TextStyle(fontSize: 13, color: Colors.white70),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── 二维码区域 ──────────────────────────────────────────────────────────────
+
+class _QrSection extends StatelessWidget {
+  const _QrSection({required this.remote});
+  final RemoteService remote;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final ip = remote.localIpAddress.value;
+      final port = remote.activePort.value;
+      final wsUrl = 'ws://$ip:$port';
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '手机端打开 Dart Claw App → 设置 → 扫描二维码连接',
+            style: TextStyle(fontSize: 12, color: Colors.white38),
+          ),
+          const SizedBox(height: 16),
+          Center(
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: QrImageView(
+                data: wsUrl,
+                version: QrVersions.auto,
+                size: 180,
+                backgroundColor: Colors.white,
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Center(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  wsUrl,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Colors.white60,
+                    fontFamily: 'monospace',
+                  ),
+                ),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: () =>
+                      Clipboard.setData(ClipboardData(text: wsUrl)),
+                  child: const Icon(Icons.copy_rounded,
+                      size: 14, color: Colors.white38),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    });
   }
 }
 

@@ -126,8 +126,8 @@ class SettingsPage extends StatelessWidget {
           _buildNavItem(
             logic,
             SettingsSection.remote,
-            Icons.phone_iphone_rounded,
-            'Remote',
+            Icons.router_rounded,
+            'Server',
           ),
         ],
       ),
