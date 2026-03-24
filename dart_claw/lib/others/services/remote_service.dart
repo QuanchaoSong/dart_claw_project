@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:dart_claw/pages/home/home_logic.dart';
 import 'package:get/get.dart';
@@ -170,12 +171,49 @@ class RemoteService {
       'm4v' => 'video/x-m4v',
       _ => 'application/octet-stream',
     };
-    final bytes = await file.readAsBytes();
-    request.response
-      ..headers.set('Content-Type', mime)
-      ..headers.set('Access-Control-Allow-Origin', '*')
-      ..add(bytes);
+
+    final fileSize = await file.length();
+    final rangeHeader = request.headers.value('range');
+
+    request.response.headers
+      ..set('Content-Type', mime)
+      ..set('Accept-Ranges', 'bytes')
+      ..set('Access-Control-Allow-Origin', '*');
+
+    if (rangeHeader != null && rangeHeader.startsWith('bytes=')) {
+      // ── 分段响应（HTTP 206 Partial Content）────────────────────────────
+      final rangePart = rangeHeader.substring(6); // strip "bytes="
+      final parts = rangePart.split('-');
+      final start = int.tryParse(parts[0]) ?? 0;
+      final end = (parts.length > 1 && parts[1].isNotEmpty)
+          ? int.tryParse(parts[1]) ?? (fileSize - 1)
+          : fileSize - 1;
+      final length = end - start + 1;
+
+      request.response
+        ..statusCode = HttpStatus.partialContent
+        ..headers.set('Content-Range', 'bytes $start-$end/$fileSize')
+        ..headers.set('Content-Length', length.toString())
+        ..add(await _readFileRange(file, start, length));
+    } else {
+      // ── 完整响应（HTTP 200）─────────────────────────────────────────────
+      request.response
+        ..statusCode = HttpStatus.ok
+        ..headers.set('Content-Length', fileSize.toString())
+        ..add(await file.readAsBytes());
+    }
+
     await request.response.close();
+  }
+
+  Future<Uint8List> _readFileRange(File file, int start, int length) async {
+    final raf = await file.open();
+    try {
+      await raf.setPosition(start);
+      return await raf.read(length);
+    } finally {
+      await raf.close();
+    }
   }
 
   void _addClient(WebSocket ws) {
