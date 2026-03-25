@@ -29,16 +29,22 @@ class LocalServer {
 
   /// 当前已连接的移动端数量
   final connectedCount = 0.obs;
+
   /// 服务器是否正在运行
   final isRunning = false.obs;
+
   /// 当前监听的端口号
   final activePort = LocalServer.defaultPort.obs;
+
   /// 桌面端的局域网 IP（供二维码使用）
   final localIpAddress = ''.obs;
+
   /// 连接模式：'direct'（同一 WiFi 直连）| 'relay'（中继）
   final connectionMode = 'direct'.obs;
+
   /// Relay 连接是否已建立
   final relayConnected = false.obs;
+
   /// 启动失败时的错误描述
   final startError = Rxn<String>();
 
@@ -47,7 +53,9 @@ class LocalServer {
   Future<void> setConnectionMode(String mode) async {
     connectionMode.value = mode;
     await AppConfigService.shared.saveServerSettings(
-      AppConfigService.shared.config.value.server.copyWith(connectionMode: mode),
+      AppConfigService.shared.config.value.server.copyWith(
+        connectionMode: mode,
+      ),
     );
     // 切换模式后重启服务器（如果当前正在运行）
     if (isRunning.value) {
@@ -76,7 +84,7 @@ class LocalServer {
       _server = await HttpServer.bind(InternetAddress.anyIPv4, p);
       activePort.value = p;
       _localIp = await _resolveLocalIp();
-      localIpAddress.value = _localIp ?? '127.0.0.1';
+      localIpAddress.value = _localIp ?? '0.0.0.0';
       _server!.listen(_handleRequest);
       _startPingTimer();
       isRunning.value = true;
@@ -96,7 +104,9 @@ class LocalServer {
       await _connectRelay(cfg);
       _startPingTimer();
       isRunning.value = true;
-      print('[LocalServer] Relay mode: connected to ${cfg.relayHost}:${cfg.relayPort}');
+      print(
+        '[LocalServer] Relay mode: connected to ${cfg.relayHost}:${cfg.relayPort}',
+      );
     } catch (e) {
       isRunning.value = false;
       startError.value = '中继连接失败：$e';
@@ -106,9 +116,11 @@ class LocalServer {
   Future<void> _connectRelay(ServerSettingsInfo cfg) async {
     _relaySocket?.close();
     final room = Uri.encodeComponent(cfg.securityCode);
-    final uri = 'ws://${cfg.relayHost}:${cfg.relayPort}/ws?role=host&room=$room';
-    _relaySocket = await WebSocket.connect(uri)
-        .timeout(const Duration(seconds: 10));
+    final uri =
+        'ws://${cfg.relayHost}:${cfg.relayPort}/ws?role=host&room=$room';
+    _relaySocket = await WebSocket.connect(
+      uri,
+    ).timeout(const Duration(seconds: 10));
     relayConnected.value = true;
     // 向首次连接的 guest 推送初始状态（relay 会透传）
     _relaySend(_buildSettingsState());
@@ -160,7 +172,7 @@ class LocalServer {
         }
       }
     }
-    return '127.0.0.1';
+    return '0.0.0.0';
   }
 
   /// 将桌面本地图片路径转为手机可访问的 HTTP URL。
@@ -352,8 +364,11 @@ class LocalServer {
         final content = msg['content'] as String? ?? '';
         final sessionId = msg['session_id'] as String?;
         if (content.isNotEmpty) {
-          Get.find<HomeLogic>()
-              .sendMessage(content, isRemote: true, sessionId: sessionId);
+          Get.find<HomeLogic>().sendMessage(
+            content,
+            isRemote: true,
+            sessionId: sessionId,
+          );
         }
         break;
       case 'confirm':
@@ -376,11 +391,14 @@ class LocalServer {
       case 'set_setting':
         final key = msg['key'] as String? ?? '';
         final value = msg['value'];
-        if (key.isNotEmpty) Get.find<HomeLogic>().applyRemoteSetting(key, value);
+        if (key.isNotEmpty)
+          Get.find<HomeLogic>().applyRemoteSetting(key, value);
         break;
       case 'set_skill':
         final name = msg['name'] as String?;
-        Get.find<HomeLogic>().setPendingSkill(name?.isEmpty == true ? null : name);
+        Get.find<HomeLogic>().setPendingSkill(
+          name?.isEmpty == true ? null : name,
+        );
         break;
       case 'sudo_input':
         final id = msg['id'] as String? ?? '';
@@ -427,7 +445,9 @@ class LocalServer {
         homeLogic.onFileReceived(safeName, dest.path);
         print('[LocalServer] Relay file saved: ${dest.path}');
       } else {
-        print('[LocalServer] Failed to download relay file: ${response.statusCode}');
+        print(
+          '[LocalServer] Failed to download relay file: ${response.statusCode}',
+        );
       }
     } catch (e) {
       print('[LocalServer] Relay file download error: $e');

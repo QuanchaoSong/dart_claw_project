@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../others/services/connection_service.dart';
@@ -16,6 +18,25 @@ class ConnectionLogic extends GetxController {
   final isConnecting = false.obs;
   final errorMessage = RxnString();
   final selectedTab = 0.obs; // 0 = scan, 1 = manual, 2 = relay
+
+  @override
+  void onReady() {
+    super.onReady();
+
+    _warmupConnection();
+  }
+
+  /// 触发 iOS "允许使用无线数据" 权限弹窗。
+  /// 必须在连接操作前执行，否则 errno=65。
+  void _warmupConnection() {
+    if (!Platform.isIOS) return;
+    HttpClient()
+      ..connectionTimeout = const Duration(seconds: 3)
+      ..getUrl(Uri.parse('https://www.apple.com'))
+          .then((req) => req.close())
+          .then((res) => res.drain<void>())
+          .catchError((_) {});
+  }
 
   @override
   void onClose() {
@@ -61,8 +82,11 @@ class ConnectionLogic extends GetxController {
     isConnecting.value = true;
     errorMessage.value = null;
     try {
-      final ok = await ConnectionService()
-          .connect(host: host, port: port, code: code);
+      final ok = await ConnectionService().connect(
+        host: host,
+        port: port,
+        code: code,
+      );
       if (ok) Get.off(() => ChatPage());
     } catch (e) {
       errorMessage.value = '连接失败: $e';
