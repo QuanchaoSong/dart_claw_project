@@ -2,10 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:dart_claw/others/model/server_settings_info.dart';
 import 'package:dart_claw/others/services/app_config_service.dart';
 import 'package:dart_claw/others/server/remote_http_handler.dart';
 import 'package:dart_claw/pages/home/home_logic.dart';
 import 'package:get/get.dart';
+import 'package:http/http.dart' as http;
 
 /// 单例：桌面端本地服务器（WebSocket + HTTP）。
 /// 访问方式：LocalServer().xxx
@@ -21,6 +23,10 @@ class LocalServer {
   final _clients = <WebSocket>{};
   String? _localIp;
 
+  // ── Relay 模式 ──────────────────────────────────────────────────────────
+  WebSocket? _relaySocket;
+  Timer? _relayReconnectTimer;
+
   /// 当前已连接的移动端数量
   final connectedCount = 0.obs;
   /// 服务器是否正在运行
@@ -29,28 +35,44 @@ class LocalServer {
   final activePort = LocalServer.defaultPort.obs;
   /// 桌面端的局域网 IP（供二维码使用）
   final localIpAddress = ''.obs;
-  /// 连接模式：'direct'（同一 WiFi 直连）| 'relay'（中继，暂未实现）
+  /// 连接模式：'direct'（同一 WiFi 直连）| 'relay'（中继）
   final connectionMode = 'direct'.obs;
+  /// Relay 连接是否已建立
+  final relayConnected = false.obs;
   /// 启动失败时的错误描述
   final startError = Rxn<String>();
 
   Timer? _pingTimer;
 
-  void setConnectionMode(String mode) {
+  Future<void> setConnectionMode(String mode) async {
     connectionMode.value = mode;
-    AppConfigService.shared.saveServerSettings(
+    await AppConfigService.shared.saveServerSettings(
       AppConfigService.shared.config.value.server.copyWith(connectionMode: mode),
     );
+    // 切换模式后重启服务器（如果当前正在运行）
+    if (isRunning.value) {
+      await stop();
+      await start();
+    }
   }
 
   // ── 生命周期 ──────────────────────────────────────────────────────────────
 
   Future<void> start({int? port}) async {
     startError.value = null;
+    final cfg = AppConfigService.shared.config.value.server;
+    connectionMode.value = cfg.connectionMode;
+
+    if (cfg.connectionMode == 'relay') {
+      await _startRelay(cfg);
+    } else {
+      await _startDirect(cfg, port);
+    }
+  }
+
+  Future<void> _startDirect(ServerSettingsInfo cfg, int? port) async {
     try {
-      final cfg = AppConfigService.shared.config.value.server;
       final p = port ?? cfg.port;
-      connectionMode.value = cfg.connectionMode;
       _server = await HttpServer.bind(InternetAddress.anyIPv4, p);
       activePort.value = p;
       _localIp = await _resolveLocalIp();
@@ -62,8 +84,63 @@ class LocalServer {
     } catch (e) {
       isRunning.value = false;
       startError.value = '服务器启动失败：$e';
-      rethrow;
     }
+  }
+
+  Future<void> _startRelay(ServerSettingsInfo cfg) async {
+    if (cfg.relayHost.isEmpty) {
+      startError.value = '中继模式需要配置 relay 服务器地址';
+      return;
+    }
+    try {
+      await _connectRelay(cfg);
+      _startPingTimer();
+      isRunning.value = true;
+      print('[LocalServer] Relay mode: connected to ${cfg.relayHost}:${cfg.relayPort}');
+    } catch (e) {
+      isRunning.value = false;
+      startError.value = '中继连接失败：$e';
+    }
+  }
+
+  Future<void> _connectRelay(ServerSettingsInfo cfg) async {
+    _relaySocket?.close();
+    final room = Uri.encodeComponent(cfg.securityCode);
+    final uri = 'ws://${cfg.relayHost}:${cfg.relayPort}/ws?role=host&room=$room';
+    _relaySocket = await WebSocket.connect(uri)
+        .timeout(const Duration(seconds: 10));
+    relayConnected.value = true;
+    // 向首次连接的 guest 推送初始状态（relay 会透传）
+    _relaySend(_buildSettingsState());
+    _relaySend(_buildSessionStats());
+    _relaySocket!.listen(
+      (data) => _handleMessage(null, data as String),
+      onDone: () {
+        relayConnected.value = false;
+        print('[LocalServer] Relay disconnected, scheduling reconnect...');
+        _scheduleRelayReconnect();
+      },
+      onError: (_) {
+        relayConnected.value = false;
+        _scheduleRelayReconnect();
+      },
+      cancelOnError: true,
+    );
+  }
+
+  void _scheduleRelayReconnect() {
+    _relayReconnectTimer?.cancel();
+    _relayReconnectTimer = Timer(const Duration(seconds: 5), () async {
+      if (connectionMode.value != 'relay' || !isRunning.value) return;
+      try {
+        final cfg = AppConfigService.shared.config.value.server;
+        await _connectRelay(cfg);
+        print('[LocalServer] Relay reconnected');
+      } catch (e) {
+        print('[LocalServer] Relay reconnect failed: $e');
+        _scheduleRelayReconnect();
+      }
+    });
   }
 
   /// 切换端口（先停止再重启）。
@@ -105,9 +182,43 @@ class LocalServer {
     return 'http://${localIpAddress.value}:${activePort.value}/file?path=${Uri.encodeComponent(path)}';
   }
 
+  // ── Relay 文件上传 ────────────────────────────────────────────────────────
+
+  bool get isRelayMode => connectionMode.value == 'relay';
+
+  String get _relayBaseUrl {
+    final cfg = AppConfigService.shared.config.value.server;
+    return 'http://${cfg.relayHost}:${cfg.relayPort}';
+  }
+
+  /// 将本地文件上传到 relay 服务器，返回可供手机端访问的完整 URL。
+  /// 仅在 relay 模式下调用。
+  Future<String> uploadFileToRelay(String localPath, String fileName) async {
+    final cfg = AppConfigService.shared.config.value.server;
+    final room = Uri.encodeComponent(cfg.securityCode);
+    final name = Uri.encodeComponent(fileName);
+    final url = Uri.parse('$_relayBaseUrl/files?room=$room&name=$name');
+
+    final expandedPath = localPath.startsWith('~/')
+        ? (Platform.environment['HOME'] ?? '') + localPath.substring(1)
+        : localPath;
+    final fileBytes = await File(expandedPath).readAsBytes();
+
+    final response = await http.post(url, body: fileBytes);
+    if (response.statusCode != 200) {
+      throw Exception('Relay file upload failed: ${response.statusCode}');
+    }
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    final relayUrl = json['url'] as String; // e.g. "/files/abc123"
+    return '$_relayBaseUrl$relayUrl';
+  }
+
   Future<void> stop() async {
     _pingTimer?.cancel();
     _pingTimer = null;
+    _relayReconnectTimer?.cancel();
+    _relayReconnectTimer = null;
+    // Direct 模式：关闭所有客户端
     for (final ws in List.of(_clients)) {
       await ws.close();
     }
@@ -115,6 +226,10 @@ class LocalServer {
     connectedCount.value = 0;
     await _server?.close(force: true);
     _server = null;
+    // Relay 模式：断开中继连接
+    _relaySocket?.close();
+    _relaySocket = null;
+    relayConnected.value = false;
     isRunning.value = false;
   }
 
@@ -219,7 +334,8 @@ class LocalServer {
 
   // ── 消息路由 ──────────────────────────────────────────────────────────────
 
-  void _handleMessage(WebSocket ws, String raw) {
+  /// [ws] 在 direct 模式下为客户端 WebSocket；relay 模式下为 null。
+  void _handleMessage(WebSocket? ws, String raw) {
     final Map<String, dynamic> msg;
     try {
       msg = jsonDecode(raw) as Map<String, dynamic>;
@@ -277,8 +393,44 @@ class LocalServer {
         final pwd = msg['password'] as String? ?? '';
         Get.find<HomeLogic>().setSudoPassword(pwd);
         break;
+      case 'relay_file_uploaded':
+        _handleRelayFileUploaded(msg);
+        break;
       default:
         print('[LocalServer] Unknown message type: ${msg['type']}');
+    }
+  }
+
+  /// 移动端通过中继上传文件后发此消息，桌面端从中继下载到本地。
+  Future<void> _handleRelayFileUploaded(Map<String, dynamic> msg) async {
+    final url = msg['url'] as String? ?? '';
+    final name = msg['name'] as String? ?? 'file';
+    final requestId = msg['request_id'] as String?;
+    if (url.isEmpty) return;
+
+    final safeName = name.replaceAll(RegExp(r'[^\w.\-]'), '_');
+    final rawDir = AppConfigService.shared.config.value.server.uploadSaveDir;
+    final saveDir = rawDir.startsWith('~/')
+        ? (Platform.environment['HOME'] ?? '') + rawDir.substring(1)
+        : rawDir;
+    await Directory(saveDir).create(recursive: true);
+    final dest = File('$saveDir/$safeName');
+
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        await dest.writeAsBytes(response.bodyBytes);
+        final homeLogic = Get.find<HomeLogic>();
+        if (requestId != null && requestId.isNotEmpty) {
+          homeLogic.onFileRequestFulfilled(requestId, dest.path);
+        }
+        homeLogic.onFileReceived(safeName, dest.path);
+        print('[LocalServer] Relay file saved: ${dest.path}');
+      } else {
+        print('[LocalServer] Failed to download relay file: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('[LocalServer] Relay file download error: $e');
     }
   }
 
@@ -302,6 +454,10 @@ class LocalServer {
 
   /// 向所有已连接的移动端广播一条消息。
   void broadcast(Map<String, dynamic> msg) {
+    if (connectionMode.value == 'relay') {
+      _relaySend(msg);
+      return;
+    }
     if (_clients.isEmpty) return;
     final raw = jsonEncode(msg);
     for (final ws in List.of(_clients)) {
@@ -310,6 +466,16 @@ class LocalServer {
       } catch (_) {
         _removeClient(ws);
       }
+    }
+  }
+
+  void _relaySend(Map<String, dynamic> msg) {
+    final ws = _relaySocket;
+    if (ws == null) return;
+    try {
+      ws.add(jsonEncode(msg));
+    } catch (_) {
+      // relay 断连由 onDone/onError 处理
     }
   }
 }

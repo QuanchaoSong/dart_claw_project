@@ -36,7 +36,11 @@ class ToolCardView extends StatelessWidget {
         msg.toolStatus == 'success' &&
         msg.fileInfo != null;
 
-    final hasSubview = showImages || showVideo || showChart || showFile;
+    // relay 模式下大文件被延迟传输
+    final showDeferred = msg.toolStatus == 'success' && msg.isRelayDeferred;
+
+    final hasSubview =
+        showImages || showVideo || showChart || showFile || showDeferred;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -156,6 +160,51 @@ class ToolCardView extends StatelessWidget {
               ),
             );
           }),
+        // ── 中继延迟文件卡片 ─────────────────────────────────────────────
+        if (showDeferred && !showImages && !showVideo && !showFile)
+          Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.04),
+              borderRadius:
+                  const BorderRadius.vertical(bottom: Radius.circular(10)),
+              border: Border(
+                left: BorderSide(color: Colors.white.withOpacity(0.07)),
+                right: BorderSide(color: Colors.white.withOpacity(0.07)),
+                bottom: BorderSide(color: Colors.white.withOpacity(0.07)),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.cloud_off_outlined,
+                    size: 20, color: Colors.orangeAccent.withOpacity(0.7)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (msg.deferredFileName.isNotEmpty)
+                        Text(
+                          msg.deferredFileName,
+                          style: const TextStyle(
+                              color: Colors.white60, fontSize: 12),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      Text(
+                        '文件较大，回到同一网络后可查看',
+                        style: TextStyle(
+                            color: Colors.white.withOpacity(0.35),
+                            fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
       ],
     );
   }

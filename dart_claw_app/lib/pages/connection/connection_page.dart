@@ -38,9 +38,16 @@ class ConnectionPage extends StatelessWidget {
                 const SizedBox(height: 36),
                 _buildSegmentedTab(),
                 const SizedBox(height: 28),
-                Obx(() => logic.selectedTab.value == 0
-                    ? _buildScanTab()
-                    : _buildManualTab()),
+                Obx(() {
+                  switch (logic.selectedTab.value) {
+                    case 0:
+                      return _buildScanTab();
+                    case 2:
+                      return _buildRelayTab();
+                    default:
+                      return _buildManualTab();
+                  }
+                }),
                 Obx(() {
                   final msg = logic.errorMessage.value;
                   if (msg == null) return const SizedBox.shrink();
@@ -92,6 +99,7 @@ class ConnectionPage extends StatelessWidget {
             children: [
               _tabItem(0, Icons.qr_code_scanner_rounded, '扫码'),
               _tabItem(1, Icons.keyboard_rounded, '手动'),
+              _tabItem(2, Icons.cloud_outlined, '中继'),
             ],
           ),
         ));
@@ -302,6 +310,101 @@ class ConnectionPage extends StatelessWidget {
             ),
           );
         }),
+      ],
+    );
+  }
+
+  // ── Relay tab ─────────────────────────────────────────────────────────────
+
+  Widget _buildRelayTab() {
+    return Column(
+      children: [
+        const SizedBox(height: 12),
+        TextField(
+          controller: logic.relayHostController,
+          keyboardType: TextInputType.url,
+          style: const TextStyle(color: Colors.white, fontSize: 15),
+          decoration: const InputDecoration(
+            labelText: '中继服务器地址',
+            prefixIcon:
+                Icon(Icons.cloud_outlined, color: Colors.white38, size: 20),
+          ),
+          onSubmitted: (_) => logic.connectRelay(),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: logic.relayPortController,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          style: const TextStyle(color: Colors.white, fontSize: 15),
+          decoration: const InputDecoration(
+            labelText: '端口',
+            prefixIcon: Icon(Icons.settings_ethernet,
+                color: Colors.white38, size: 20),
+          ),
+          onSubmitted: (_) => logic.connectRelay(),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: logic.relayCodeController,
+          style: const TextStyle(
+              color: Colors.white, fontSize: 15, fontFamily: 'monospace'),
+          decoration: const InputDecoration(
+            labelText: '安全码（桌面端 Security Code）',
+            prefixIcon:
+                Icon(Icons.lock_outline, color: Colors.white38, size: 20),
+          ),
+          onSubmitted: (_) => logic.connectRelay(),
+        ),
+        const SizedBox(height: 24),
+        Obx(() {
+          final busy = logic.isConnecting.value;
+          return SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: busy
+                    ? null
+                    : const LinearGradient(
+                        colors: AppColors.primaryGradient),
+                color: busy
+                    ? Colors.white.withValues(alpha: 0.08)
+                    : null,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: TextButton(
+                onPressed: busy ? null : logic.connectRelay,
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+                child: busy
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor:
+                              AlwaysStoppedAnimation(Colors.white70),
+                        ),
+                      )
+                    : const Text('连接中继',
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w600)),
+              ),
+            ),
+          );
+        }),
+        const SizedBox(height: 16),
+        Text(
+          '通过中继服务器连接，无需手机和电脑在同一网络',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+              fontSize: 12,
+              color: Colors.white.withValues(alpha: 0.3)),
+        ),
       ],
     );
   }

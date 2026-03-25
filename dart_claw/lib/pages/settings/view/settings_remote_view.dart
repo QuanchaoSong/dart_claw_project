@@ -4,6 +4,7 @@ import 'package:dart_claw/others/server/local_server.dart';
 import 'package:dart_claw/others/tool/hud_tool.dart';
 import 'package:dart_claw/pages/settings/view/common_settings_widgets.dart';
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -61,23 +62,30 @@ class _SettingsRemoteViewState extends State<SettingsRemoteView> {
         const SizedBox(height: 12),
         _ServerToggleRow(remote: _remote),
 
-        // ── 连接方式（仅运行时显示）──────────────────────────────────────
+        // ── 启动错误（如有）──────────────────────────────────────────────
         Obx(() {
-          if (!_remote.isRunning.value) return const SizedBox.shrink();
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 24),
-              settingsSectionTitle('连接方式'),
-              const SizedBox(height: 12),
-              _ConnectionModeRow(remote: _remote),
-            ],
+          final err = _remote.startError.value;
+          if (err == null) return const SizedBox.shrink();
+          return Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Text(
+              err,
+              style: const TextStyle(fontSize: 12, color: Colors.redAccent),
+            ),
           );
         }),
 
-        // ── 端口（仅运行时显示）──────────────────────────────────────────
+        // ── 连接方式（始终显示）──────────────────────────────────────────────
+        const SizedBox(height: 24),
+        settingsSectionTitle('连接方式'),
+        const SizedBox(height: 12),
+        _ConnectionModeRow(remote: _remote),
+
+        // ── 端口（直连模式）─────────────────────────────────────────────
         Obx(() {
-          if (!_remote.isRunning.value) return const SizedBox.shrink();
+          if (_remote.connectionMode.value != 'direct') {
+            return const SizedBox.shrink();
+          }
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -94,12 +102,25 @@ class _SettingsRemoteViewState extends State<SettingsRemoteView> {
           );
         }),
 
-        // ── 二维码（运行中 + 直连模式）───────────────────────────────────
+        // ── 中继配置（中继模式）──────────────────────────────────────────
         Obx(() {
-          if (!_remote.isRunning.value) return const SizedBox.shrink();
-          if (_remote.connectionMode.value != 'direct') {
+          if (_remote.connectionMode.value != 'relay') {
             return const SizedBox.shrink();
           }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 24),
+              settingsSectionTitle('中继配置'),
+              const SizedBox(height: 12),
+              _RelayConfigSection(remote: _remote),
+            ],
+          );
+        }),
+
+        // ── 二维码（运行中，直连和中继都显示）──────────────────────────────
+        Obx(() {
+          if (!_remote.isRunning.value) return const SizedBox.shrink();
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -156,6 +177,21 @@ class _ServerToggleRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Obx(() {
       final running = remote.isRunning.value;
+      final isRelay = remote.connectionMode.value == 'relay';
+
+      final IconData icon;
+      final String title;
+      final String subtitle;
+      if (isRelay) {
+        icon = Icons.cloud_rounded;
+        title = '中继服务';
+        subtitle = running ? '已通过中继服务器连接' : '已停止，未连接中继服务器';
+      } else {
+        icon = Icons.wifi_tethering_rounded;
+        title = '本地服务';
+        subtitle = running ? '运行中，手机端可连接' : '已停止，手机端无法连接';
+      }
+
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
@@ -166,7 +202,7 @@ class _ServerToggleRow extends StatelessWidget {
         child: Row(
           children: [
             Icon(
-              Icons.wifi_tethering_rounded,
+              icon,
               size: 18,
               color: running ? Colors.greenAccent : Colors.white30,
             ),
@@ -177,7 +213,7 @@ class _ServerToggleRow extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    '本地服务',
+                    title,
                     style: TextStyle(
                       fontSize: 13,
                       color: running ? Colors.white : Colors.white54,
@@ -185,7 +221,7 @@ class _ServerToggleRow extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    running ? '运行中，手机端可连接' : '已停止，手机端无法连接',
+                    subtitle,
                     style: TextStyle(
                       fontSize: 11,
                       color: running
@@ -245,10 +281,10 @@ class _ConnectionModeRow extends StatelessWidget {
             child: _ModeCard(
               label: '中继服务器',
               icon: Icons.cloud_rounded,
-              description: '跨网络访问（即将支持）',
+              description: '跨网络访问',
               selected: mode == 'relay',
-              disabled: true,
-              onTap: null,
+              disabled: false,
+              onTap: () => remote.setConnectionMode('relay'),
             ),
           ),
         ],
@@ -376,17 +412,29 @@ class _QrSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Obx(() {
-      final ip = remote.localIpAddress.value;
-      final port = remote.activePort.value;
       final cfg = AppConfigService.shared.config.value.server;
       final code = cfg.securityCode;
-      final wsUrl = 'ws://$ip:$port?code=$code';
+      final isRelay = remote.connectionMode.value == 'relay';
+
+      final String qrData;
+      final String hint;
+      if (isRelay) {
+        final rh = cfg.relayHost;
+        final rp = cfg.relayPort;
+        qrData = 'relay://$rh:$rp?room=$code';
+        hint = '手机端扫码 → 自动通过中继服务器连接';
+      } else {
+        final ip = remote.localIpAddress.value;
+        final port = remote.activePort.value;
+        qrData = 'ws://$ip:$port?code=$code';
+        hint = '手机端打开 Dart Claw App → 设置 → 扫描二维码连接';
+      }
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            '手机端打开 Dart Claw App → 设置 → 扫描二维码连接',
-            style: TextStyle(fontSize: 12, color: Colors.white38),
+          Text(
+            hint,
+            style: const TextStyle(fontSize: 12, color: Colors.white38),
           ),
           const SizedBox(height: 16),
           Center(
@@ -397,7 +445,7 @@ class _QrSection extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: QrImageView(
-                data: wsUrl,
+                data: qrData,
                 version: QrVersions.auto,
                 size: 180,
                 backgroundColor: Colors.white,
@@ -411,7 +459,7 @@ class _QrSection extends StatelessWidget {
               children: [
                 Flexible(
                   child: Text(
-                    wsUrl,
+                    qrData,
                     style: const TextStyle(
                       fontSize: 13,
                       color: Colors.white60,
@@ -423,7 +471,7 @@ class _QrSection extends StatelessWidget {
                 const SizedBox(width: 8),
                 GestureDetector(
                   onTap: () {
-                    Clipboard.setData(ClipboardData(text: wsUrl));
+                    Clipboard.setData(ClipboardData(text: qrData));
                     HudTool.showInfo('Copied');
                   },
                   child: const Icon(Icons.copy_rounded,
@@ -438,6 +486,155 @@ class _QrSection extends StatelessWidget {
         ],
       );
     });
+  }
+}
+
+// ── 中继服务器配置 ──────────────────────────────────────────────────────────
+
+class _RelayConfigSection extends StatefulWidget {
+  const _RelayConfigSection({required this.remote});
+  final LocalServer remote;
+
+  @override
+  State<_RelayConfigSection> createState() => _RelayConfigSectionState();
+}
+
+class _RelayConfigSectionState extends State<_RelayConfigSection> {
+  late final TextEditingController _hostCtrl;
+  late final TextEditingController _portCtrl;
+  String? _error;
+  bool _connecting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final cfg = AppConfigService.shared.config.value.server;
+    _hostCtrl = TextEditingController(text: cfg.relayHost);
+    _portCtrl = TextEditingController(text: '${cfg.relayPort}');
+  }
+
+  @override
+  void dispose() {
+    _hostCtrl.dispose();
+    _portCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final host = _hostCtrl.text.trim();
+    final port = int.tryParse(_portCtrl.text.trim()) ?? 37789;
+    if (host.isEmpty) {
+      setState(() => _error = '请填写中继服务器地址');
+      return;
+    }
+    await AppConfigService.shared.saveServerSettings(
+      AppConfigService.shared.config.value.server
+          .copyWith(relayHost: host, relayPort: port),
+    );
+    // 如果正在运行中继模式，重新连接
+    if (widget.remote.isRunning.value &&
+        widget.remote.connectionMode.value == 'relay') {
+      setState(() { _error = null; _connecting = true; });
+      try {
+        await widget.remote.stop();
+        await widget.remote.start();
+        if (mounted) {
+          final err = widget.remote.startError.value;
+          setState(() {
+            _connecting = false;
+            _error = err;
+          });
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            _connecting = false;
+            _error = '中继连接失败：$e';
+          });
+        }
+      }
+    } else {
+      setState(() => _error = null);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '中继服务器地址',
+            style: TextStyle(fontSize: 12, color: Colors.white54),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                flex: 3,
+                child: settingsTextField(
+                  controller: _hostCtrl,
+                  hintText: '例：relay.example.com',
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 1,
+                child: settingsTextField(
+                  controller: _portCtrl,
+                  hintText: '37789',
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                ),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: _connecting ? null : _save,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.07),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.12)),
+                  ),
+                  child: _connecting
+                      ? const CupertinoActivityIndicator(
+                          radius: 8,
+                          color: Colors.white54,
+                        )
+                      : const Text(
+                          '应用',
+                          style:
+                              TextStyle(fontSize: 13, color: Colors.white70),
+                        ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (_error != null) ...[
+            Text(
+              _error!,
+              style: const TextStyle(fontSize: 11, color: Colors.redAccent),
+            ),
+            const SizedBox(height: 4),
+          ],
+          const Text(
+            '填写中继服务器地址后点击「应用」。手机端可通过此服务器跨网络连接。',
+            style: TextStyle(fontSize: 11, color: Colors.white24),
+          ),
+        ],
+      ),
+    );
   }
 }
 

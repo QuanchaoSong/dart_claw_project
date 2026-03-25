@@ -58,6 +58,17 @@ class RemoteMessageInfo {
     };
   }
 
+  /// 中继模式下文件超过阈值时，桌面端发 relay_deferred: true，
+  /// 表示此文件需回到同一网络后才能查看。
+  bool get isRelayDeferred => toolArgs?['relay_deferred'] == true;
+
+  /// relay_deferred 时的文件名（show_image / show_video / show_file 共用）
+  String get deferredFileName =>
+      toolArgs?['name'] as String? ?? toolArgs?['file_name'] as String? ?? '';
+
+  /// relay_deferred 时的文件大小（字节）
+  int get deferredFileSize => toolArgs?['size'] as int? ?? 0;
+
   /// 确认请求 ID（confirm 类型专用）
   String? confirmId;
 

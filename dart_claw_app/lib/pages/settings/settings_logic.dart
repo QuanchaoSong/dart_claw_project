@@ -10,6 +10,7 @@ class SettingsLogic extends GetxController {
 
   String get serverUrl => _conn.serverUrl;
   bool get isConnected => _conn.isConnected.value;
+  bool get isRelayMode => _conn.isRelayMode.value;
 
   // ── 加载状态 ──
   final isLoading = true.obs;
@@ -29,6 +30,9 @@ class SettingsLogic extends GetxController {
 
   // ── Scheduler ──
   final schedulerTasks = <Map<String, dynamic>>[].obs;
+
+  // ── Relay ──
+  final relayFileMaxMB = 20.obs; // 默认 20 MB
 
   // ── Controllers ──
   late final TextEditingController temperatureController;
@@ -53,6 +57,11 @@ class SettingsLogic extends GetxController {
   }
 
   Future<void> loadAll() async {
+    if (isRelayMode) {
+      // 中继模式下无法直接 HTTP 调用桌面端，跳过加载
+      isLoading.value = false;
+      return;
+    }
     isLoading.value = true;
     loadError.value = null;
     try {
@@ -137,6 +146,17 @@ class SettingsLogic extends GetxController {
       'session': {'maxRounds': v},
     });
     _applyConfig(result as Map<String, dynamic>);
+  }
+
+  /// 设置中继文件大小上限（MB），通过 WebSocket 发送到桌面端。
+  void setRelayFileMaxMB(int mb) {
+    relayFileMaxMB.value = mb;
+    final bytes = mb * 1024 * 1024;
+    _conn.send({
+      'type': 'set_setting',
+      'key': 'relay_file_max_bytes',
+      'value': bytes,
+    });
   }
 
   void disconnect() {

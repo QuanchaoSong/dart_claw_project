@@ -123,6 +123,13 @@ class HomeLogic extends GetxController {
         if (value is bool) allowToolDeviation.value = value;
       case 'auto_fill_sudo':
         if (value is bool) autoFillSudoPassword.value = value;
+      case 'relay_file_max_bytes':
+        if (value is int && value > 0) {
+          AppConfigService.shared.saveServerSettings(
+            AppConfigService.shared.config.value.server
+                .copyWith(relayFileMaxBytes: value),
+          );
+        }
     }
   }
 
@@ -285,18 +292,66 @@ class HomeLogic extends GetxController {
 
   /// show_image 工具广播时，将本地路径替换为手机可访问的 HTTP URL。
   /// 其他工具原样返回 args。
-  Map<String, dynamic> _remoteArgs(ClawToolCallRecord record) {
+  /// relay 模式下：小文件上传到 relay 服务器；大文件只发元数据。
+  Future<Map<String, dynamic>> _remoteArgs(ClawToolCallRecord record) async {
+    final server = LocalServer();
+    final relay = server.isRelayMode;
+    final maxBytes =
+        AppConfigService.shared.config.value.server.relayFileMaxBytes;
+
     if (record.name == 'show_image') {
       final paths = record.args['paths'];
       if (paths is! List || paths.isEmpty) return record.args;
-      final transformed =
-          paths.map((p) => LocalServer().imageUrl(p.toString())).toList();
+      final transformed = <String>[];
+      for (final p in paths) {
+        final s = p.toString();
+        if (s.startsWith('http://') || s.startsWith('https://')) {
+          transformed.add(s);
+        } else if (relay) {
+          final fileSize = await _fileSize(s);
+          if (fileSize > maxBytes) {
+            // 超过阈值，跳过该图片（后续可在手机端显示占位）
+            continue;
+          }
+          final fileName = File(s).uri.pathSegments.last;
+          transformed.add(await server.uploadFileToRelay(s, fileName));
+        } else {
+          transformed.add(server.imageUrl(s));
+        }
+      }
+      if (relay && transformed.isEmpty) {
+        // 所有图片都超过阈值 → 发元数据卡片
+        return {
+          ...record.args,
+          'paths': <String>[],
+          'relay_deferred': true,
+        };
+      }
       return {...record.args, 'paths': transformed};
     }
     if (record.name == 'show_video') {
       final path = record.args['path'];
       if (path is! String || path.isEmpty) return record.args;
-      return {...record.args, 'path': LocalServer().videoUrl(path)};
+      if (path.startsWith('http://') || path.startsWith('https://')) {
+        return record.args;
+      }
+      if (relay) {
+        final fileSize = await _fileSize(path);
+        if (fileSize > maxBytes) {
+          final fileName = File(path).uri.pathSegments.last;
+          return {
+            ...record.args,
+            'path': '',
+            'name': fileName,
+            'size': fileSize,
+            'relay_deferred': true,
+          };
+        }
+        final fileName = File(path).uri.pathSegments.last;
+        final url = await server.uploadFileToRelay(path, fileName);
+        return {...record.args, 'path': url};
+      }
+      return {...record.args, 'path': server.videoUrl(path)};
     }
     if (record.name == 'show_file') {
       final rawPath = record.args['path'] as String? ?? '';
@@ -308,14 +363,38 @@ class HomeLogic extends GetxController {
       final fileName = file.uri.pathSegments.last;
       int size = 0;
       try { size = file.statSync().size; } catch (_) {}
+      if (relay && size > maxBytes) {
+        return {
+          ...record.args,
+          'url': '',
+          'name': fileName,
+          'size': size,
+          'relay_deferred': true,
+        };
+      }
+      final url = relay
+          ? await server.uploadFileToRelay(rawPath, fileName)
+          : server.fileUrl(rawPath);
       return {
         ...record.args,
-        'url': LocalServer().fileUrl(rawPath),
+        'url': url,
         'name': fileName,
         'size': size,
       };
     }
     return record.args;
+  }
+
+  /// 获取文件大小（展开 ~ 路径），文件不存在返回 0。
+  Future<int> _fileSize(String path) async {
+    final expanded = path.startsWith('~/')
+        ? (Platform.environment['HOME'] ?? '') + path.substring(1)
+        : path;
+    try {
+      return await File(expanded).length();
+    } catch (_) {
+      return 0;
+    }
   }
 
   /// 处理来自 ClawAgentRunner 的事件（阶段二实现，目前为 stub）
@@ -341,12 +420,14 @@ class HomeLogic extends GetxController {
 
       case ClawAgentToolEvent(:final record):
         _upsertToolRecord(record);
-        _broadcast({
-          'type': 'tool',
-          'id': record.id,
-          'name': record.name,
-          'args': _remoteArgs(record),
-          'status': record.status.name,
+        _remoteArgs(record).then((args) {
+          _broadcast({
+            'type': 'tool',
+            'id': record.id,
+            'name': record.name,
+            'args': args,
+            'status': record.status.name,
+          });
         });
 
       case ClawAgentConfirmRequestEvent(:final requestId, :final message, :final record):

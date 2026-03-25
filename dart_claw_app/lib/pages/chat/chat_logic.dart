@@ -484,52 +484,114 @@ class ChatLogic extends GetxController {
     uploadProgress.value = 0;
 
     try {
-      final host = ConnectionService().serverHost.value;
-      final port = ConnectionService().serverPort.value;
-      final requestIdParam =
-          requestId != null ? '&request_id=${Uri.encodeComponent(requestId)}' : '';
-      final uri = Uri.parse(
-          'http://$host:$port/upload?name=${Uri.encodeComponent(fileName)}$requestIdParam');
-
-      final client = HttpClient();
-      client.connectionTimeout = const Duration(seconds: 10);
-      final req = await client.postUrl(uri);
-      req.headers
-        ..set('Content-Type', 'application/octet-stream')
-        ..set('Content-Length', fileSize.toString());
-
-      // 流式读取，实时计算上传进度
-      int sent = 0;
-      await for (final chunk in File(filePath).openRead()) {
-        req.add(chunk);
-        sent += chunk.length;
-        if (fileSize > 0) {
-          uploadProgress.value = (sent / fileSize).clamp(0.0, 1.0);
-        }
-      }
-
-      final response = await req.close();
-      client.close();
-
-      if (response.statusCode == 200) {
-        final body = await response.transform(const Utf8Decoder()).join();
-        final json = jsonDecode(body) as Map<String, dynamic>;
-        if (json['ok'] == true) {
-          uploadProgress.value = 1.0;
-          messages.add(RemoteMessageInfo.log('📎 已传输到桌面端：$fileName'));
-          _scrollToBottom();
-        } else {
-          uploadError.value = '上传失败';
-        }
+      if (ConnectionService().isRelayMode.value) {
+        await _uploadViaRelay(filePath, fileName, fileSize, requestId);
       } else {
-        uploadError.value = '上传失败 (${response.statusCode})';
+        await _uploadDirect(filePath, fileName, fileSize, requestId);
       }
     } on SocketException {
-      uploadError.value = '无法连接到桌面端';
+      uploadError.value = '无法连接到服务器';
     } catch (_) {
       uploadError.value = '上传错误';
     } finally {
       isUploading.value = false;
+    }
+  }
+
+  /// 直连模式：上传到桌面端 HTTP /upload。
+  Future<void> _uploadDirect(
+      String filePath, String fileName, int fileSize, String? requestId) async {
+    final host = ConnectionService().serverHost.value;
+    final port = ConnectionService().serverPort.value;
+    final requestIdParam =
+        requestId != null ? '&request_id=${Uri.encodeComponent(requestId)}' : '';
+    final uri = Uri.parse(
+        'http://$host:$port/upload?name=${Uri.encodeComponent(fileName)}$requestIdParam');
+
+    final client = HttpClient();
+    client.connectionTimeout = const Duration(seconds: 10);
+    final req = await client.postUrl(uri);
+    req.headers
+      ..set('Content-Type', 'application/octet-stream')
+      ..set('Content-Length', fileSize.toString());
+
+    int sent = 0;
+    await for (final chunk in File(filePath).openRead()) {
+      req.add(chunk);
+      sent += chunk.length;
+      if (fileSize > 0) {
+        uploadProgress.value = (sent / fileSize).clamp(0.0, 1.0);
+      }
+    }
+
+    final response = await req.close();
+    client.close();
+
+    if (response.statusCode == 200) {
+      final body = await response.transform(const Utf8Decoder()).join();
+      final json = jsonDecode(body) as Map<String, dynamic>;
+      if (json['ok'] == true) {
+        uploadProgress.value = 1.0;
+        messages.add(RemoteMessageInfo.log('📎 已传输到桌面端：$fileName'));
+        _scrollToBottom();
+      } else {
+        uploadError.value = '上传失败';
+      }
+    } else {
+      uploadError.value = '上传失败 (${response.statusCode})';
+    }
+  }
+
+  /// 中继模式：上传到中继服务器 /files，再通过 WS 通知桌面端下载。
+  Future<void> _uploadViaRelay(
+      String filePath, String fileName, int fileSize, String? requestId) async {
+    final conn = ConnectionService();
+    final baseUrl = conn.relayBaseUrl;
+    final roomId = conn.relayRoom;
+    final uri = Uri.parse(
+        '$baseUrl/files?room=${Uri.encodeComponent(roomId)}&name=${Uri.encodeComponent(fileName)}');
+
+    final client = HttpClient();
+    client.connectionTimeout = const Duration(seconds: 10);
+    final req = await client.postUrl(uri);
+    req.headers
+      ..set('Content-Type', 'application/octet-stream')
+      ..set('Content-Length', fileSize.toString());
+
+    int sent = 0;
+    await for (final chunk in File(filePath).openRead()) {
+      req.add(chunk);
+      sent += chunk.length;
+      if (fileSize > 0) {
+        uploadProgress.value = (sent / fileSize).clamp(0.0, 1.0);
+      }
+    }
+
+    final response = await req.close();
+    client.close();
+
+    if (response.statusCode == 200) {
+      final body = await response.transform(const Utf8Decoder()).join();
+      final json = jsonDecode(body) as Map<String, dynamic>;
+      final fileId = json['id'] as String?;
+      if (fileId != null) {
+        final fileUrl = '$baseUrl/files/$fileId';
+        uploadProgress.value = 1.0;
+        // 通过 WS 通知桌面端：中继上有文件可下载
+        ConnectionService().send({
+          'type': 'relay_file_uploaded',
+          'url': fileUrl,
+          'name': fileName,
+          'size': fileSize,
+          if (requestId != null) 'request_id': requestId,
+        });
+        messages.add(RemoteMessageInfo.log('📎 已传输到中继：$fileName'));
+        _scrollToBottom();
+      } else {
+        uploadError.value = '上传失败';
+      }
+    } else {
+      uploadError.value = '上传失败 (${response.statusCode})';
     }
   }
 

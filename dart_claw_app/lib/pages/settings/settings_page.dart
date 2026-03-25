@@ -122,15 +122,22 @@ class SettingsPage extends StatelessWidget {
   }
 
   Widget _buildContent(SettingsLogic logic) {
+    final isRelay = logic.isRelayMode;
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        _buildAiModelSection(logic),
-        const SizedBox(height: 28),
-        _buildSessionSection(logic),
-        const SizedBox(height: 28),
-        _buildSchedulerSection(logic),
-        const SizedBox(height: 28),
+        if (!isRelay) ...[
+          _buildAiModelSection(logic),
+          const SizedBox(height: 28),
+          _buildSessionSection(logic),
+          const SizedBox(height: 28),
+          _buildSchedulerSection(logic),
+          const SizedBox(height: 28),
+        ],
+        if (isRelay) ...[
+          _buildRelaySection(logic),
+          const SizedBox(height: 28),
+        ],
         _buildConnectionSection(logic),
         const SizedBox(height: 28),
         _buildAboutSection(),
@@ -268,6 +275,70 @@ class SettingsPage extends StatelessWidget {
                   padding: const EdgeInsets.only(bottom: 8),
                   child: _SchedulerTaskTile(task: t),
                 )),
+        ],
+      );
+    });
+  }
+
+  // ── Relay ────────────────────────────────────────────────────────────────
+
+  Widget _buildRelaySection(SettingsLogic logic) {
+    return Obx(() {
+      final mb = logic.relayFileMaxMB.value;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _SectionLabel('中继'),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.04),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.white.withOpacity(0.07)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Text('文件中转上限',
+                        style:
+                            TextStyle(color: Colors.white60, fontSize: 13)),
+                    const Spacer(),
+                    Text('$mb MB',
+                        style: const TextStyle(
+                            color: Colors.white, fontSize: 13)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                SliderTheme(
+                  data: SliderThemeData(
+                    activeTrackColor: AppColors.primary,
+                    inactiveTrackColor: Colors.white.withOpacity(0.08),
+                    thumbColor: AppColors.primary,
+                    overlayColor: AppColors.primary.withOpacity(0.12),
+                    trackHeight: 3,
+                  ),
+                  child: Slider(
+                    min: 1,
+                    max: 100,
+                    divisions: 99,
+                    value: mb.toDouble(),
+                    onChanged: (v) =>
+                        logic.relayFileMaxMB.value = v.round(),
+                    onChangeEnd: (v) =>
+                        logic.setRelayFileMaxMB(v.round()),
+                  ),
+                ),
+                Text(
+                  '超过此大小的文件不会通过中继传输',
+                  style: TextStyle(
+                      color: Colors.white.withOpacity(0.3), fontSize: 11),
+                ),
+              ],
+            ),
+          ),
         ],
       );
     });

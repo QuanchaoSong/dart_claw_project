@@ -20,6 +20,21 @@ class ConnectionService with WidgetsBindingObserver {
   final serverHost = ''.obs;
   final serverPort = 37788.obs;
 
+  /// 是否通过中继服务器连接（而非同一 WiFi 直连）。
+  final isRelayMode = false.obs;
+
+  /// 中继服务器地址（relay 模式有效）。
+  final relayHost = ''.obs;
+
+  /// 中继服务器端口（relay 模式有效）。
+  final relayPort = 37789.obs;
+
+  /// 中继房间 ID（= 桌面端 security code），relay 模式有效。
+  String relayRoom = '';
+
+  /// 中继模式下的 HTTP 基地址，用于文件上传等。
+  String get relayBaseUrl => 'http://${relayHost.value}:${relayPort.value}';
+
   WebSocket? _socket;
   var _appInForeground = true;
 
@@ -35,19 +50,47 @@ class ConnectionService with WidgetsBindingObserver {
   /// 桌面端推送的消息流（ping/pong 心跳不在其中）。
   Stream<Map<String, dynamic>> get incomingMessages => _msgController.stream;
 
-  String get serverUrl => 'ws://${serverHost.value}:${serverPort.value}';
+  String get serverUrl => isRelayMode.value
+      ? 'relay://${relayHost.value}:${relayPort.value}'
+      : 'ws://${serverHost.value}:${serverPort.value}';
 
   /// 建立 WebSocket 连接，成功返回 true。
+  ///
+  /// 直连模式：ws://$host:$port?code=xxx
+  /// 中继模式：ws://$relayHost:$relayPort/ws?role=guest&room=xxx
   Future<bool> connect({
     required String host,
     required int port,
     String code = '',
+    bool relay = false,
+    String relayHostAddr = '',
+    int relayPortNum = 37789,
   }) async {
-    serverHost.value = host;
-    serverPort.value = port;
+    isRelayMode.value = relay;
+
+    if (relay) {
+      relayHost.value = relayHostAddr;
+      relayPort.value = relayPortNum;
+      relayRoom = code;
+      // host/port 保持空，relay 模式下不使用直连地址
+      serverHost.value = '';
+      serverPort.value = 0;
+    } else {
+      serverHost.value = host;
+      serverPort.value = port;
+      relayRoom = '';
+    }
+
     try {
-      final codeParam = code.isNotEmpty ? '?code=${Uri.encodeComponent(code)}' : '';
-      _socket = await WebSocket.connect('ws://$host:$port$codeParam')
+      final String wsUrl;
+      if (relay) {
+        final roomParam = code.isNotEmpty ? Uri.encodeComponent(code) : '';
+        wsUrl = 'ws://$relayHostAddr:$relayPortNum/ws?role=guest&room=$roomParam';
+      } else {
+        final codeParam = code.isNotEmpty ? '?code=${Uri.encodeComponent(code)}' : '';
+        wsUrl = 'ws://$host:$port$codeParam';
+      }
+      _socket = await WebSocket.connect(wsUrl)
           .timeout(const Duration(seconds: 5));
       isConnected.value = true;
       _socket!.listen(

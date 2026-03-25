@@ -8,21 +8,42 @@ class ConnectionLogic extends GetxController {
   final portController = TextEditingController(text: '37788');
   final codeController = TextEditingController();
 
+  // ── 中继模式字段 ──────────────────────────────────────────────────────────
+  final relayHostController = TextEditingController();
+  final relayPortController = TextEditingController(text: '37789');
+  final relayCodeController = TextEditingController();
+
   final isConnecting = false.obs;
   final errorMessage = RxnString();
-  final selectedTab = 0.obs; // 0 = scan, 1 = manual
+  final selectedTab = 0.obs; // 0 = scan, 1 = manual, 2 = relay
 
   @override
   void onClose() {
     hostController.dispose();
     portController.dispose();
     codeController.dispose();
+    relayHostController.dispose();
+    relayPortController.dispose();
+    relayCodeController.dispose();
     super.onClose();
   }
 
-  Future<void> connectFromQr(String wsUrl) async {
-    final uri = Uri.tryParse(wsUrl);
-    if (uri == null || uri.host.isEmpty || uri.port == 0) return;
+  Future<void> connectFromQr(String qrData) async {
+    final uri = Uri.tryParse(qrData);
+    if (uri == null || uri.host.isEmpty) return;
+
+    // relay://host:port?room=securityCode
+    if (uri.scheme == 'relay') {
+      relayHostController.text = uri.host;
+      relayPortController.text = '${uri.port}';
+      relayCodeController.text = uri.queryParameters['room'] ?? '';
+      selectedTab.value = 2;
+      await connectRelay();
+      return;
+    }
+
+    // ws://host:port?code=securityCode （直连模式）
+    if (uri.port == 0) return;
     hostController.text = uri.host;
     portController.text = '${uri.port}';
     codeController.text = uri.queryParameters['code'] ?? '';
@@ -42,6 +63,38 @@ class ConnectionLogic extends GetxController {
     try {
       final ok = await ConnectionService()
           .connect(host: host, port: port, code: code);
+      if (ok) Get.off(() => ChatPage());
+    } catch (e) {
+      errorMessage.value = '连接失败: $e';
+    } finally {
+      isConnecting.value = false;
+    }
+  }
+
+  /// 通过中继服务器连接桌面端。
+  Future<void> connectRelay() async {
+    final host = relayHostController.text.trim();
+    final port = int.tryParse(relayPortController.text.trim());
+    final code = relayCodeController.text.trim();
+    if (host.isEmpty || port == null) {
+      errorMessage.value = '请填写有效的中继地址和端口';
+      return;
+    }
+    if (code.isEmpty) {
+      errorMessage.value = '请填写安全码';
+      return;
+    }
+    isConnecting.value = true;
+    errorMessage.value = null;
+    try {
+      final ok = await ConnectionService().connect(
+        host: '',
+        port: 0,
+        code: code,
+        relay: true,
+        relayHostAddr: host,
+        relayPortNum: port,
+      );
       if (ok) Get.off(() => ChatPage());
     } catch (e) {
       errorMessage.value = '连接失败: $e';
