@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:media_kit/media_kit.dart';
 import 'others/constants/color_constants.dart';
@@ -68,6 +69,17 @@ class MyApp extends StatelessWidget {
         ),
       ),
       home: ConnectionPage(),
+      builder: FlutterSmartDialog.init(
+        builder: (context, widget) {
+          return MediaQuery(
+            //设置全局的文字的textScaleFactor为1.0，文字不再随系统设置改变
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(1.0)),
+            child: widget!,
+          );
+        },
+      ),
     );
   }
 }

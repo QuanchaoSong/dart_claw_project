@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:dart_claw/others/services/app_config_service.dart';
-import 'package:dart_claw/others/services/remote_service.dart';
+import 'package:dart_claw/others/server/local_server.dart';
 import 'package:dart_claw/others/tool/snackbar_tool.dart';
 import 'package:dart_claw/others/model/claw_session_info.dart';
 import 'package:dart_claw/others/tool/database_tool.dart';
@@ -280,7 +280,7 @@ class HomeLogic extends GetxController {
   // ─── 事件处理 ─────────────────────────────────────────────────────────────
 
   void _broadcast(Map<String, dynamic> data) {
-    RemoteService().broadcast({...data, 'session_id': currentSessionId.value});
+    LocalServer().broadcast({...data, 'session_id': currentSessionId.value});
   }
 
   /// show_image 工具广播时，将本地路径替换为手机可访问的 HTTP URL。
@@ -290,13 +290,13 @@ class HomeLogic extends GetxController {
       final paths = record.args['paths'];
       if (paths is! List || paths.isEmpty) return record.args;
       final transformed =
-          paths.map((p) => RemoteService().imageUrl(p.toString())).toList();
+          paths.map((p) => LocalServer().imageUrl(p.toString())).toList();
       return {...record.args, 'paths': transformed};
     }
     if (record.name == 'show_video') {
       final path = record.args['path'];
       if (path is! String || path.isEmpty) return record.args;
-      return {...record.args, 'path': RemoteService().videoUrl(path)};
+      return {...record.args, 'path': LocalServer().videoUrl(path)};
     }
     if (record.name == 'show_file') {
       final rawPath = record.args['path'] as String? ?? '';
@@ -310,7 +310,7 @@ class HomeLogic extends GetxController {
       try { size = file.statSync().size; } catch (_) {}
       return {
         ...record.args,
-        'url': RemoteService().fileUrl(rawPath),
+        'url': LocalServer().fileUrl(rawPath),
         'name': fileName,
         'size': size,
       };
@@ -832,12 +832,12 @@ class HomeLogic extends GetxController {
     return completer.future;
   }
 
-  /// 移动端上传完成后（带 request_id 的上传）由 RemoteService 调用。
+  /// 移动端上传完成后（带 request_id 的上传）由 LocalServer 调用。
   void onFileRequestFulfilled(String requestId, String savedPath) {
     _pendingFileRequestCompleters.remove(requestId)?.complete(savedPath);
   }
 
-  /// 文件上传完成后由 RemoteService 调用：显示桌面通知
+  /// 文件上传完成后由 LocalServer 调用：显示桌面通知
   void onFileReceived(String name, String savedPath) {
     SnackbarTool.showSuccessWithTitle(
       '文件已接收',

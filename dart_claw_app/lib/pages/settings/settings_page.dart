@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import '../../others/constants/color_constants.dart';
 import '../../others/services/connection_service.dart';
@@ -52,7 +53,42 @@ class SettingsPage extends StatelessWidget {
                 children: [
                   _buildHeader(context),
                   const Divider(color: Colors.white12, height: 1),
-                  Expanded(child: _buildContent(logic)),
+                  Expanded(
+                    child: Obx(() {
+                      if (logic.isLoading.value) {
+                        return const Center(
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor:
+                                AlwaysStoppedAnimation(AppColors.primary),
+                          ),
+                        );
+                      }
+                      final err = logic.loadError.value;
+                      if (err != null) {
+                        return Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(32),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(err,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                        color: Colors.white54, fontSize: 13)),
+                                const SizedBox(height: 16),
+                                TextButton(
+                                  onPressed: () => logic.loadAll(),
+                                  child: const Text('重试'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }
+                      return _buildContent(logic);
+                    }),
+                  ),
                 ],
               ),
             ),
@@ -61,8 +97,6 @@ class SettingsPage extends StatelessWidget {
       ),
     );
   }
-
-  // ── Header ─────────────────────────────────────────────────────────────────
 
   Widget _buildHeader(BuildContext context) {
     return Padding(
@@ -87,24 +121,165 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
-  // ── Content ────────────────────────────────────────────────────────────────
-
   Widget _buildContent(SettingsLogic logic) {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
+        _buildAiModelSection(logic),
+        const SizedBox(height: 28),
+        _buildSessionSection(logic),
+        const SizedBox(height: 28),
+        _buildSchedulerSection(logic),
+        const SizedBox(height: 28),
         _buildConnectionSection(logic),
-        const SizedBox(height: 40),
+        const SizedBox(height: 28),
         _buildAboutSection(),
+        const SizedBox(height: 20),
       ],
     );
   }
+
+  // ── AI Model ───────────────────────────────────────────────────────────────
+
+  Widget _buildAiModelSection(SettingsLogic logic) {
+    return Obx(() => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const _SectionLabel('AI MODEL'),
+            const SizedBox(height: 12),
+            // Provider 选择
+            _SettingsTile(
+              label: 'Provider',
+              child: _DropdownButton<String>(
+                value: logic.provider.value,
+                items: logic.availableProviders
+                    .map((p) => DropdownMenuItem(
+                          value: p['name'] as String,
+                          child: Text(p['displayName'] as String,
+                              style: const TextStyle(
+                                  color: Colors.white, fontSize: 13)),
+                        ))
+                    .toList(),
+                onChanged: (v) {
+                  if (v != null) logic.setProvider(v);
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+            // Model 选择
+            _SettingsTile(
+              label: 'Model',
+              child: logic.availableModels.isEmpty
+                  ? Text(logic.modelId.value,
+                      style: const TextStyle(
+                          color: Colors.white70, fontSize: 13))
+                  : _DropdownButton<String>(
+                      value: logic.availableModels
+                              .contains(logic.modelId.value)
+                          ? logic.modelId.value
+                          : null,
+                      items: logic.availableModels
+                          .map((m) => DropdownMenuItem(
+                                value: m,
+                                child: Text(m,
+                                    style: const TextStyle(
+                                        color: Colors.white, fontSize: 13)),
+                              ))
+                          .toList(),
+                      onChanged: (v) {
+                        if (v != null) logic.setModel(v);
+                      },
+                    ),
+            ),
+            const SizedBox(height: 8),
+            // Temperature
+            _SettingsTile(
+              label: 'Temperature',
+              child: _CompactTextField(
+                controller: logic.temperatureController,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                onSubmitted: (_) => logic.applyTemperature(),
+              ),
+            ),
+            const SizedBox(height: 8),
+            // Max Tokens
+            _SettingsTile(
+              label: 'Max Tokens',
+              child: _CompactTextField(
+                controller: logic.maxTokensController,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                onSubmitted: (_) => logic.applyMaxTokens(),
+              ),
+            ),
+          ],
+        ));
+  }
+
+  // ── Session ────────────────────────────────────────────────────────────────
+
+  Widget _buildSessionSection(SettingsLogic logic) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionLabel('SESSION'),
+        const SizedBox(height: 12),
+        _SettingsTile(
+          label: 'Max Tool Call Rounds',
+          child: _CompactTextField(
+            controller: logic.maxRoundsController,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            onSubmitted: (_) => logic.applyMaxRounds(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Scheduler ──────────────────────────────────────────────────────────────
+
+  Widget _buildSchedulerSection(SettingsLogic logic) {
+    return Obx(() {
+      final tasks = logic.schedulerTasks;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _SectionLabel('SCHEDULER'),
+          const SizedBox(height: 12),
+          if (tasks.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.04),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.white.withOpacity(0.07)),
+              ),
+              child: const Text(
+                '暂无定时任务',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white30, fontSize: 13),
+              ),
+            )
+          else
+            ...tasks.map((t) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _SchedulerTaskTile(task: t),
+                )),
+        ],
+      );
+    });
+  }
+
+  // ── Connection ─────────────────────────────────────────────────────────────
 
   Widget _buildConnectionSection(SettingsLogic logic) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionLabel('连接信息'),
+        const _SectionLabel('连接'),
         const SizedBox(height: 12),
         Obx(() => _InfoTile(
               label: '服务器',
@@ -112,31 +287,29 @@ class SettingsPage extends StatelessWidget {
                   ? logic.serverUrl
                   : '未连接',
             )),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         Obx(() => ConnectionService().isConnected.value
-            ? _buildDisconnectButton(logic)
+            ? SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.link_off, size: 16),
+                  label: const Text('断开连接'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.redAccent,
+                    side: const BorderSide(color: Colors.redAccent),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: logic.disconnect,
+                ),
+              )
             : const SizedBox.shrink()),
       ],
     );
   }
 
-  Widget _buildDisconnectButton(SettingsLogic logic) {
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton.icon(
-        icon: const Icon(Icons.link_off, size: 16),
-        label: const Text('断开连接'),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: Colors.redAccent,
-          side: const BorderSide(color: Colors.redAccent),
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-        onPressed: logic.disconnect,
-      ),
-    );
-  }
+  // ── About ──────────────────────────────────────────────────────────────────
 
   Widget _buildAboutSection() {
     return const Column(
@@ -150,7 +323,9 @@ class SettingsPage extends StatelessWidget {
   }
 }
 
-// ─── Shared widgets ────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// Shared widgets
+// ═══════════════════════════════════════════════════════════════════════════════
 
 class _SectionLabel extends StatelessWidget {
   const _SectionLabel(this.text);
@@ -195,6 +370,170 @@ class _InfoTile extends StatelessWidget {
               style: const TextStyle(color: Colors.white, fontSize: 13),
               textAlign: TextAlign.right,
               overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingsTile extends StatelessWidget {
+  const _SettingsTile({required this.label, required this.child});
+  final String label;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white.withOpacity(0.07)),
+      ),
+      child: Row(
+        children: [
+          Text(label,
+              style: const TextStyle(color: Colors.white60, fontSize: 13)),
+          const Spacer(),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _DropdownButton<T> extends StatelessWidget {
+  const _DropdownButton({
+    required this.value,
+    required this.items,
+    required this.onChanged,
+    super.key,
+  });
+  final T? value;
+  final List<DropdownMenuItem<T>> items;
+  final ValueChanged<T?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButton<T>(
+      value: value,
+      items: items,
+      onChanged: onChanged,
+      dropdownColor: AppColors.bgSurface,
+      underline: const SizedBox.shrink(),
+      isDense: true,
+      style: const TextStyle(color: Colors.white, fontSize: 13),
+      icon: const Icon(Icons.expand_more, color: Colors.white38, size: 18),
+    );
+  }
+}
+
+class _CompactTextField extends StatelessWidget {
+  const _CompactTextField({
+    required this.controller,
+    this.keyboardType,
+    this.inputFormatters,
+    this.onSubmitted,
+  });
+  final TextEditingController controller;
+  final TextInputType? keyboardType;
+  final List<TextInputFormatter>? inputFormatters;
+  final ValueChanged<String>? onSubmitted;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 90,
+      child: TextField(
+        controller: controller,
+        keyboardType: keyboardType,
+        inputFormatters: inputFormatters,
+        onSubmitted: onSubmitted,
+        textAlign: TextAlign.right,
+        style: const TextStyle(color: Colors.white, fontSize: 13),
+        decoration: const InputDecoration(
+          isDense: true,
+          contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          border: InputBorder.none,
+        ),
+      ),
+    );
+  }
+}
+
+class _SchedulerTaskTile extends StatelessWidget {
+  const _SchedulerTaskTile({required this.task});
+  final Map<String, dynamic> task;
+
+  @override
+  Widget build(BuildContext context) {
+    final name = task['name'] as String? ?? '';
+    final mode = task['mode'] as String? ?? '';
+    final time = task['time'] as String? ?? '';
+    final enabled = task['isEnabled'] as bool? ?? false;
+    final actionType = task['actionType'] as String? ?? '';
+    final weekdays = (task['weekdays'] as List?)?.join(', ') ?? '';
+
+    String schedule;
+    switch (mode) {
+      case 'daily':
+        schedule = '每天 $time';
+      case 'weekly':
+        schedule = '每周 $weekdays $time';
+      case 'once':
+        schedule = '一次性 $time';
+      default:
+        schedule = time;
+    }
+
+    final actionIcon = actionType == 'aiPrompt'
+        ? Icons.smart_toy_outlined
+        : Icons.terminal_rounded;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white.withOpacity(0.07)),
+      ),
+      child: Row(
+        children: [
+          Icon(actionIcon, size: 16, color: Colors.white38),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name,
+                    style: TextStyle(
+                      color: enabled ? Colors.white : Colors.white38,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    )),
+                const SizedBox(height: 2),
+                Text(schedule,
+                    style:
+                        const TextStyle(color: Colors.white30, fontSize: 11)),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: enabled
+                  ? AppColors.primary.withOpacity(0.15)
+                  : Colors.white.withOpacity(0.04),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              enabled ? '启用' : '停用',
+              style: TextStyle(
+                fontSize: 10,
+                color: enabled ? AppColors.primary : Colors.white30,
+              ),
             ),
           ),
         ],

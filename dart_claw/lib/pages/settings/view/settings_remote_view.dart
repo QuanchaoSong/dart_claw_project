@@ -1,6 +1,7 @@
 import 'package:dart_claw/others/model/server_settings_info.dart';
 import 'package:dart_claw/others/services/app_config_service.dart';
-import 'package:dart_claw/others/services/remote_service.dart';
+import 'package:dart_claw/others/server/local_server.dart';
+import 'package:dart_claw/others/tool/hud_tool.dart';
 import 'package:dart_claw/pages/settings/view/common_settings_widgets.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
@@ -19,7 +20,7 @@ class SettingsRemoteView extends StatefulWidget {
 
 class _SettingsRemoteViewState extends State<SettingsRemoteView> {
   late final TextEditingController _portController;
-  final _remote = RemoteService();
+  final _remote = LocalServer();
 
   @override
   void initState() {
@@ -149,7 +150,7 @@ class _SettingsRemoteViewState extends State<SettingsRemoteView> {
 
 class _ServerToggleRow extends StatelessWidget {
   const _ServerToggleRow({required this.remote});
-  final RemoteService remote;
+  final LocalServer remote;
 
   @override
   Widget build(BuildContext context) {
@@ -221,7 +222,7 @@ class _ServerToggleRow extends StatelessWidget {
 
 class _ConnectionModeRow extends StatelessWidget {
   const _ConnectionModeRow({required this.remote});
-  final RemoteService remote;
+  final LocalServer remote;
 
   @override
   Widget build(BuildContext context) {
@@ -370,7 +371,7 @@ class _PortRow extends StatelessWidget {
 
 class _QrSection extends StatelessWidget {
   const _QrSection({required this.remote});
-  final RemoteService remote;
+  final LocalServer remote;
 
   @override
   Widget build(BuildContext context) {
@@ -421,8 +422,10 @@ class _QrSection extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 GestureDetector(
-                  onTap: () =>
-                      Clipboard.setData(ClipboardData(text: wsUrl)),
+                  onTap: () {
+                    Clipboard.setData(ClipboardData(text: wsUrl));
+                    HudTool.showInfo('Copied');
+                  },
                   child: const Icon(Icons.copy_rounded,
                       size: 14, color: Colors.white38),
                 ),
@@ -504,8 +507,10 @@ class _SecurityCodeRow extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               GestureDetector(
-                onTap: () => Clipboard.setData(
-                    ClipboardData(text: cfg.securityCode)),
+                onTap: () {
+                  Clipboard.setData(ClipboardData(text: cfg.securityCode));
+                  HudTool.showInfo('Copied');
+                },
                 child: const Icon(Icons.copy_rounded,
                     size: 14, color: Colors.white38),
               ),
