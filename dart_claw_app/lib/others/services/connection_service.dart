@@ -26,11 +26,16 @@ class ConnectionService {
   String get serverUrl => 'ws://${serverHost.value}:${serverPort.value}';
 
   /// 建立 WebSocket 连接，成功返回 true。
-  Future<bool> connect({required String host, required int port}) async {
+  Future<bool> connect({
+    required String host,
+    required int port,
+    String code = '',
+  }) async {
     serverHost.value = host;
     serverPort.value = port;
     try {
-      _socket = await WebSocket.connect('ws://$host:$port')
+      final codeParam = code.isNotEmpty ? '?code=${Uri.encodeComponent(code)}' : '';
+      _socket = await WebSocket.connect('ws://$host:$port$codeParam')
           .timeout(const Duration(seconds: 5));
       isConnected.value = true;
       _socket!.listen(

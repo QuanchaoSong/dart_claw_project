@@ -1,3 +1,4 @@
+import 'package:dart_claw/others/model/server_settings_info.dart';
 import 'package:dart_claw/others/services/app_config_service.dart';
 import 'package:dart_claw/others/services/remote_service.dart';
 import 'package:dart_claw/pages/settings/view/common_settings_widgets.dart';
@@ -232,7 +233,7 @@ class _ConnectionModeRow extends StatelessWidget {
             child: _ModeCard(
               label: '直连（同一 WiFi）',
               icon: Icons.wifi_rounded,
-              description: '手机与桌面在同一局域网内',
+              description: '手机与电脑在同一局域网内',
               selected: mode == 'direct',
               disabled: false,
               onTap: () => remote.setConnectionMode('direct'),
@@ -376,7 +377,9 @@ class _QrSection extends StatelessWidget {
     return Obx(() {
       final ip = remote.localIpAddress.value;
       final port = remote.activePort.value;
-      final wsUrl = 'ws://$ip:$port';
+      final cfg = AppConfigService.shared.config.value.server;
+      final code = cfg.securityCode;
+      final wsUrl = 'ws://$ip:$port?code=$code';
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -405,12 +408,15 @@ class _QrSection extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  wsUrl,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: Colors.white60,
-                    fontFamily: 'monospace',
+                Flexible(
+                  child: Text(
+                    wsUrl,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: Colors.white60,
+                      fontFamily: 'monospace',
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -423,9 +429,149 @@ class _QrSection extends StatelessWidget {
               ],
             ),
           ),
+          const SizedBox(height: 20),
+          // ── 安全码 ──
+          _SecurityCodeRow(cfg: cfg),
         ],
       );
     });
+  }
+}
+
+// ── 安全码 + 强度切换 ──────────────────────────────────────────────────────
+
+class _SecurityCodeRow extends StatelessWidget {
+  const _SecurityCodeRow({required this.cfg});
+  final ServerSettingsInfo cfg;
+
+  void _regenerate(int length) {
+    final newCode = ServerSettingsInfo.generateCode(length);
+    AppConfigService.shared.saveServerSettings(
+      cfg.copyWith(securityCode: newCode, securityCodeLength: length),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.lock_outline,
+                  size: 14, color: Colors.white38),
+              const SizedBox(width: 8),
+              const Text('安全码',
+                  style: TextStyle(fontSize: 12, color: Colors.white54)),
+              const Spacer(),
+              GestureDetector(
+                onTap: () => _regenerate(cfg.securityCodeLength),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.refresh_rounded,
+                        size: 13, color: Colors.white38),
+                    SizedBox(width: 4),
+                    Text('重新生成',
+                        style:
+                            TextStyle(fontSize: 11, color: Colors.white38)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          // 安全码文本
+          Row(
+            children: [
+              Expanded(
+                child: SelectableText(
+                  cfg.securityCode,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.white70,
+                    fontFamily: 'monospace',
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () => Clipboard.setData(
+                    ClipboardData(text: cfg.securityCode)),
+                child: const Icon(Icons.copy_rounded,
+                    size: 14, color: Colors.white38),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // 强度切换
+          Row(
+            children: [
+              const Text('强度',
+                  style: TextStyle(fontSize: 11, color: Colors.white30)),
+              const SizedBox(width: 10),
+              for (final len in [8, 16, 32]) ...[
+                if (len != 8) const SizedBox(width: 6),
+                _StrengthChip(
+                  label: '$len 位',
+                  selected: cfg.securityCodeLength == len,
+                  onTap: () => _regenerate(len),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StrengthChip extends StatelessWidget {
+  const _StrengthChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: selected
+              ? const Color(0xFF6C63FF).withValues(alpha: 0.25)
+              : Colors.white.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: selected
+                ? const Color(0xFF6C63FF).withValues(alpha: 0.5)
+                : Colors.white.withValues(alpha: 0.1),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            color: selected ? Colors.white : Colors.white38,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+          ),
+        ),
+      ),
+    );
   }
 }
 

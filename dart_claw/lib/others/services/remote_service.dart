@@ -155,6 +155,17 @@ class RemoteService {
         ..close();
       return;
     }
+    // 验证安全码
+    final expectedCode =
+        AppConfigService.shared.config.value.server.securityCode;
+    final clientCode = request.uri.queryParameters['code'];
+    if (clientCode != expectedCode) {
+      request.response
+        ..statusCode = HttpStatus.forbidden
+        ..write('Invalid security code')
+        ..close();
+      return;
+    }
     final ws = await WebSocketTransformer.upgrade(request);
     _addClient(ws);
   }
