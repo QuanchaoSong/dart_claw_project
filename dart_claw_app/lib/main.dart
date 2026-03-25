@@ -3,6 +3,7 @@ import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:media_kit/media_kit.dart';
 import 'others/constants/color_constants.dart';
+import 'others/services/push_notification_service.dart';
 import 'others/tool/database_tool.dart';
 import 'pages/connection/connection_page.dart';
 
@@ -10,6 +11,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
   await DatabaseTool().init();
+  await PushNotificationService().init();
   runApp(const MyApp());
 }
 

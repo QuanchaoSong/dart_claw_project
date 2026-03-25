@@ -2,13 +2,18 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
+
+import 'push_notification_service.dart';
 
 /// 单例：管理与桌面端（dart_claw）的 WebSocket 连接状态。
 /// 访问方式：ConnectionService().xxx
-class ConnectionService {
+class ConnectionService with WidgetsBindingObserver {
   static final ConnectionService _instance = ConnectionService._();
-  ConnectionService._();
+  ConnectionService._() {
+    WidgetsBinding.instance.addObserver(this);
+  }
   factory ConnectionService() => _instance;
 
   final isConnected = false.obs;
@@ -16,6 +21,13 @@ class ConnectionService {
   final serverPort = 37788.obs;
 
   WebSocket? _socket;
+  var _appInForeground = true;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _appInForeground =
+        state == AppLifecycleState.resumed;
+  }
 
   final _msgController =
       StreamController<Map<String, dynamic>>.broadcast();
@@ -60,8 +72,32 @@ class ConnectionService {
         _socket?.add(jsonEncode({'type': 'pong'}));
         return; // 心跳不转发给监听者
       }
+      _dispatchNotification(msg);
       _msgController.add(msg);
     } catch (_) {}
+  }
+
+  /// 根据消息类型决定是否弹推送或播放提示音。
+  void _dispatchNotification(Map<String, dynamic> msg) {
+    if (_appInForeground) return;
+    final type = msg['type'] as String?;
+    switch (type) {
+      case 'done':
+        PushNotificationService().show(
+          title: '任务完成',
+          body: '您的 AI 任务已执行完毕',
+        );
+      case 'error':
+        PushNotificationService().show(
+          title: '任务出错',
+          body: msg['message'] as String? ?? '执行过程中遇到错误',
+        );
+      // 以下场景需要用户交互——后续放入 SoundTool.play('alert.wav')
+      // case 'confirm_request':
+      // case 'ask_user':
+      // case 'sudo_prompt':
+      // case 'request_file':
+    }
   }
 
   void _onDisconnected() {
