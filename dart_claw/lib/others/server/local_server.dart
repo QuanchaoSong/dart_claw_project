@@ -429,7 +429,11 @@ class LocalServer {
     final params = msg['params'] as Map<String, dynamic>? ?? {};
 
     void reply(Map<String, dynamic> payload) {
-      final response = {'type': 'rpc_response', 'request_id': requestId, ...payload};
+      final response = {
+        'type': 'rpc_response',
+        'request_id': requestId,
+        ...payload,
+      };
       if (ws != null) {
         _send(ws, response);
       } else {
@@ -439,6 +443,13 @@ class LocalServer {
 
     try {
       switch (method) {
+        case 'get_skills':
+          final skills = await Get.find<HomeLogic>().loadAvailableSkills();
+          reply({
+            'data': skills
+                .map((s) => {'name': s.name, 'description': s.description})
+                .toList(),
+          });
         case 'get_config':
           reply({'data': RemoteHttpHandler.buildConfigData()});
         case 'set_config':
