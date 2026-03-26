@@ -71,7 +71,7 @@ class ConnectionPage extends StatelessWidget {
       ),
     );
 
-    return GestureDetector(onTap: () => FocusScope.of(context).unfocus(), child: c);
+    return GestureDetector(onTap: () => FocusScope.of(context).unfocus(), behavior: HitTestBehavior.opaque, child: c);
   }
 
   // ── Logo ──────────────────────────────────────────────────────────────────
@@ -329,7 +329,7 @@ class ConnectionPage extends StatelessWidget {
         const SizedBox(height: 12),
         TextField(
           controller: logic.relayHostController,
-          keyboardType: TextInputType.url,
+          keyboardType: TextInputType.url,          
           style: const TextStyle(color: Colors.white, fontSize: 15),
           decoration: const InputDecoration(
             labelText: '中继服务器地址',

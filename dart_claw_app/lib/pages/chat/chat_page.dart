@@ -42,13 +42,17 @@ class ChatPage extends StatelessWidget {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          const Divider(color: Colors.white12, height: 1),
-          const Expanded(child: MessageListView()),
-          const Divider(color: Colors.white12, height: 1),
-          InputAreaView(),
-        ],
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        behavior: HitTestBehavior.opaque,
+        child: Column(
+          children: [
+            const Divider(color: Colors.white12, height: 1),
+            const Expanded(child: MessageListView()),
+            const Divider(color: Colors.white12, height: 1),
+            InputAreaView(),
+          ],
+        ),
       ),
     );
   }

@@ -35,6 +35,7 @@ class MessageListView extends StatelessWidget {
         controller: logic.scrollController,
         padding: const EdgeInsets.fromLTRB(12, 16, 12, 16),
         itemCount: logic.messages.length,
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         itemBuilder: (ctx, i) {
           final msg = logic.messages[i];
           return switch (msg.type) {
