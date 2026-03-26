@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:dart_claw_app/others/tool/hud_tool.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../others/model/connection_info.dart';
@@ -64,7 +65,10 @@ class ConnectionLogic extends GetxController {
 
   Future<void> connectFromQr(String qrData) async {
     final uri = Uri.tryParse(qrData);
-    if (uri == null || uri.host.isEmpty) return;
+    if (uri == null || uri.host.isEmpty) {
+      HudTool.showInfo('无效的二维码数据');
+      return;
+    };
 
     // relay://host:port?room=securityCode
     if (uri.scheme == 'relay') {
@@ -91,6 +95,11 @@ class ConnectionLogic extends GetxController {
       errorMessage.value = '请填写有效的 IP 和端口';
       return;
     }
+    if (codeController.text.trim().isEmpty) {
+      errorMessage.value = '请填写安全码';
+      return;
+    }
+
     final code = codeController.text.trim();
     isConnecting.value = true;
     errorMessage.value = null;
@@ -107,10 +116,14 @@ class ConnectionLogic extends GetxController {
         info.code = code;
         info.lastTab = selectedTab.value;
         await info.save();
-        Get.off(() => ChatPage());
+        Get.off(() => ChatPage(), transition: Transition.downToUp);
+      } else {
+        errorMessage.value = '连接失败，请检查 IP、端口和安全码';
+        debugPrint('[ConnectionLogic] connect failed: host=$host port=$port');
       }
     } catch (e) {
       errorMessage.value = '连接失败: $e';
+      debugPrint('[ConnectionLogic] connect error: $e');
     } finally {
       isConnecting.value = false;
     }
@@ -123,10 +136,12 @@ class ConnectionLogic extends GetxController {
     final code = relayCodeController.text.trim();
     if (host.isEmpty || port == null) {
       errorMessage.value = '请填写有效的中继地址和端口';
+      // HudTool.showInfo('请填写有效的中继地址和端口');
       return;
     }
     if (code.isEmpty) {
       errorMessage.value = '请填写安全码';
+      // HudTool.showInfo('请填写安全码');
       return;
     }
     isConnecting.value = true;
@@ -147,10 +162,14 @@ class ConnectionLogic extends GetxController {
         info.relayCode = code;
         info.lastTab = selectedTab.value;
         await info.save();
-        Get.off(() => ChatPage());
+        Get.off(() => ChatPage(), transition: Transition.downToUp);
+      } else {
+        errorMessage.value = '连接失败，请检查中继地址、端口和安全码';
+        debugPrint('[ConnectionLogic] connectRelay failed: host=$host port=$port');
       }
     } catch (e) {
       errorMessage.value = '连接失败: $e';
+      debugPrint('[ConnectionLogic] connectRelay error: $e');
     } finally {
       isConnecting.value = false;
     }

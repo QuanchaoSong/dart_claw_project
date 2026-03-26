@@ -18,53 +18,60 @@ class ConnectionPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF0A0E1A), Color(0xFF0D1230), Color(0xFF111827)],
-          ),
+      body: _buildBody(context),
+    );
+  }
+
+  Widget _buildBody(BuildContext context) {
+    Container c = Container(
+      width: double.infinity,
+      height: double.infinity,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF0A0E1A), Color(0xFF0D1230), Color(0xFF111827)],
         ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
-            child: Column(
-              children: [
-                _buildLogo(),
-                const SizedBox(height: 36),
-                _buildSegmentedTab(),
-                const SizedBox(height: 28),
-                Obx(() {
-                  switch (logic.selectedTab.value) {
-                    case 0:
-                      return _buildScanTab();
-                    case 2:
-                      return _buildRelayTab();
-                    default:
-                      return _buildManualTab();
-                  }
-                }),
-                Obx(() {
-                  final msg = logic.errorMessage.value;
-                  if (msg == null) return const SizedBox.shrink();
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 16),
-                    child: Text(msg,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                            color: Colors.redAccent, fontSize: 13)),
-                  );
-                }),
-              ],
-            ),
+      ),
+      child: SafeArea(
+        child: SingleChildScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding:
+              const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
+          child: Column(
+            children: [
+              _buildLogo(),
+              const SizedBox(height: 36),
+              _buildSegmentedTab(),
+              const SizedBox(height: 28),
+              Obx(() {
+                switch (logic.selectedTab.value) {
+                  case 0:
+                    return _buildScanTab();
+                  case 2:
+                    return _buildRelayTab();
+                  default:
+                    return _buildManualTab();
+                }
+              }),
+              Obx(() {
+                final msg = logic.errorMessage.value;
+                if (msg == null) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: Text(msg,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                          color: Colors.redAccent, fontSize: 13)),
+                );
+              }),
+            ],
           ),
         ),
       ),
     );
+
+    return GestureDetector(onTap: () => FocusScope.of(context).unfocus(), child: c);
   }
 
   // ── Logo ──────────────────────────────────────────────────────────────────
