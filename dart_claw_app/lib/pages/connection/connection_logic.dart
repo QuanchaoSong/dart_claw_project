@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../others/model/connection_info.dart';
 import '../../others/services/connection_service.dart';
 import '../chat/chat_page.dart';
 
@@ -22,8 +23,20 @@ class ConnectionLogic extends GetxController {
   @override
   void onReady() {
     super.onReady();
-
+    _loadSavedInfo();
     _warmupConnection();
+  }
+
+  Future<void> _loadSavedInfo() async {
+    await ConnectionInfo().load();
+    final info = ConnectionInfo();
+    hostController.text = info.host;
+    portController.text = '${info.port}';
+    codeController.text = info.code;
+    relayHostController.text = info.relayHost;
+    relayPortController.text = '${info.relayPort}';
+    relayCodeController.text = info.relayCode;
+    selectedTab.value = info.lastTab;
   }
 
   /// 触发 iOS "允许使用无线数据" 权限弹窗。
@@ -87,7 +100,15 @@ class ConnectionLogic extends GetxController {
         port: port,
         code: code,
       );
-      if (ok) Get.off(() => ChatPage());
+      if (ok) {
+        final info = ConnectionInfo();
+        info.host = host;
+        info.port = port;
+        info.code = code;
+        info.lastTab = selectedTab.value;
+        await info.save();
+        Get.off(() => ChatPage());
+      }
     } catch (e) {
       errorMessage.value = '连接失败: $e';
     } finally {
@@ -119,7 +140,15 @@ class ConnectionLogic extends GetxController {
         relayHostAddr: host,
         relayPortNum: port,
       );
-      if (ok) Get.off(() => ChatPage());
+      if (ok) {
+        final info = ConnectionInfo();
+        info.relayHost = host;
+        info.relayPort = port;
+        info.relayCode = code;
+        info.lastTab = selectedTab.value;
+        await info.save();
+        Get.off(() => ChatPage());
+      }
     } catch (e) {
       errorMessage.value = '连接失败: $e';
     } finally {
