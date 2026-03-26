@@ -1,3 +1,4 @@
+import 'package:dart_claw_app/others/tool/hud_tool.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -15,12 +16,12 @@ void openSettings(BuildContext context) {
     transitionDuration: const Duration(milliseconds: 260),
     pageBuilder: (ctx, _, __) => const SettingsPage(),
     transitionBuilder: (ctx, anim, _, child) {
-      final curved =
-          CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
+      final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
       return SlideTransition(
         position: Tween(
-                begin: const Offset(1.0, 0.0), end: Offset.zero)
-            .animate(curved),
+          begin: const Offset(1.0, 0.0),
+          end: Offset.zero,
+        ).animate(curved),
         child: child,
       );
     },
@@ -53,42 +54,7 @@ class SettingsPage extends StatelessWidget {
                 children: [
                   _buildHeader(context),
                   const Divider(color: Colors.white12, height: 1),
-                  Expanded(
-                    child: Obx(() {
-                      if (logic.isLoading.value) {
-                        return const Center(
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor:
-                                AlwaysStoppedAnimation(AppColors.primary),
-                          ),
-                        );
-                      }
-                      final err = logic.loadError.value;
-                      if (err != null) {
-                        return Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(32),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(err,
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                        color: Colors.white54, fontSize: 13)),
-                                const SizedBox(height: 16),
-                                TextButton(
-                                  onPressed: () => logic.loadAll(),
-                                  child: const Text('重试'),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      }
-                      return _buildContent(logic);
-                    }),
-                  ),
+                  Expanded(child: _buildContent(logic)),
                 ],
               ),
             ),
@@ -99,6 +65,7 @@ class SettingsPage extends StatelessWidget {
   }
 
   Widget _buildHeader(BuildContext context) {
+    final logic = Get.find<SettingsLogic>();
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 8, 16),
       child: Row(
@@ -110,6 +77,19 @@ class SettingsPage extends StatelessWidget {
               fontWeight: FontWeight.bold,
               color: Colors.white,
             ),
+          ),
+          const SizedBox(width: 8),
+          Obx(
+            () => logic.isLoading.value
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 1.5,
+                      valueColor: AlwaysStoppedAnimation(AppColors.primary),
+                    ),
+                  )
+                : const SizedBox.shrink(),
           ),
           const Spacer(),
           IconButton(
@@ -127,16 +107,57 @@ class SettingsPage extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       children: [
+        // 配置加载失败时显示内联错误条，不阻断整个页面
+        Obx(() {
+          final err = logic.loadError.value;
+          if (err == null) return const SizedBox.shrink();
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.red.withOpacity(0.25)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.warning_amber_rounded,
+                    size: 16,
+                    color: Colors.redAccent,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      err,
+                      style: const TextStyle(
+                        color: Colors.redAccent,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: logic.loadAll,
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: const Text('重试', style: TextStyle(fontSize: 12)),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }),
         _buildAiModelSection(logic),
         const SizedBox(height: 28),
         _buildSessionSection(logic),
         const SizedBox(height: 28),
         _buildSchedulerSection(logic),
         const SizedBox(height: 28),
-        if (isRelay) ...[
-          _buildRelaySection(logic),
-          const SizedBox(height: 28),
-        ],
+        if (isRelay) ...[_buildRelaySection(logic), const SizedBox(height: 28)],
         _buildConnectionSection(logic),
         const SizedBox(height: 28),
         _buildAboutSection(),
@@ -148,79 +169,94 @@ class SettingsPage extends StatelessWidget {
   // ── AI Model ───────────────────────────────────────────────────────────────
 
   Widget _buildAiModelSection(SettingsLogic logic) {
-    return Obx(() => Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const _SectionLabel('AI MODEL'),
-            const SizedBox(height: 12),
-            // Provider 选择
-            _SettingsTile(
-              label: 'Provider',
-              child: _DropdownButton<String>(
-                value: logic.provider.value,
-                items: logic.availableProviders
-                    .map((p) => DropdownMenuItem(
-                          value: p['name'] as String,
-                          child: Text(p['displayName'] as String,
-                              style: const TextStyle(
-                                  color: Colors.white, fontSize: 13)),
-                        ))
-                    .toList(),
-                onChanged: (v) {
-                  if (v != null) logic.setProvider(v);
-                },
-              ),
-            ),
-            const SizedBox(height: 8),
-            // Model 选择
-            _SettingsTile(
-              label: 'Model',
-              child: logic.availableModels.isEmpty
-                  ? Text(logic.modelId.value,
-                      style: const TextStyle(
-                          color: Colors.white70, fontSize: 13))
-                  : _DropdownButton<String>(
-                      value: logic.availableModels
-                              .contains(logic.modelId.value)
-                          ? logic.modelId.value
-                          : null,
-                      items: logic.availableModels
-                          .map((m) => DropdownMenuItem(
-                                value: m,
-                                child: Text(m,
-                                    style: const TextStyle(
-                                        color: Colors.white, fontSize: 13)),
-                              ))
-                          .toList(),
-                      onChanged: (v) {
-                        if (v != null) logic.setModel(v);
-                      },
+    return Obx(
+      () => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _SectionLabel('AI MODEL'),
+          const SizedBox(height: 12),
+          // Provider 选择
+          _SettingsTile(
+            label: 'Provider',
+            child: _DropdownButton<String>(
+              value: logic.provider.value,
+              items: logic.availableProviders
+                  .map(
+                    (p) => DropdownMenuItem(
+                      value: p['name'] as String,
+                      child: Text(
+                        p['displayName'] as String,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                        ),
+                      ),
                     ),
+                  )
+                  .toList(),
+              onChanged: (v) {
+                if (v != null) logic.setProvider(v);
+              },
             ),
-            const SizedBox(height: 8),
-            // Temperature
-            _SettingsTile(
-              label: 'Temperature',
-              child: _CompactTextField(
-                controller: logic.temperatureController,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                onSubmitted: (_) => logic.applyTemperature(),
+          ),
+          const SizedBox(height: 8),
+          // Model 选择
+          _SettingsTile(
+            label: 'Model',
+            child: logic.availableModels.isEmpty
+                ? Text(
+                    logic.modelId.value,
+                    style: const TextStyle(color: Colors.white70, fontSize: 13),
+                  )
+                : _DropdownButton<String>(
+                    value: logic.availableModels.contains(logic.modelId.value)
+                        ? logic.modelId.value
+                        : null,
+                    items: logic.availableModels
+                        .map(
+                          (m) => DropdownMenuItem(
+                            value: m,
+                            child: Text(
+                              m,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (v) {
+                      if (v != null) logic.setModel(v);
+                    },
+                  ),
+          ),
+          const SizedBox(height: 8),
+          // Temperature
+          _SettingsTile(
+            label: 'Temperature',
+            child: _CompactTextField(
+              controller: logic.temperatureController,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
               ),
+              onSubmitted: (_) => logic.applyTemperature(),
             ),
-            const SizedBox(height: 8),
-            // Max Tokens
-            _SettingsTile(
-              label: 'Max Tokens',
-              child: _CompactTextField(
-                controller: logic.maxTokensController,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                onSubmitted: (_) => logic.applyMaxTokens(),
-              ),
+          ),
+          const SizedBox(height: 8),
+          // Max Tokens
+          _SettingsTile(
+            label: 'Max Tokens',
+            child: _CompactTextField(
+              controller: logic.maxTokensController,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              onSubmitted: (_) => logic.applyMaxTokens(),
             ),
-          ],
-        ));
+          ),
+        ],
+      ),
+    );
   }
 
   // ── Session ────────────────────────────────────────────────────────────────
@@ -270,10 +306,12 @@ class SettingsPage extends StatelessWidget {
               ),
             )
           else
-            ...tasks.map((t) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: _SchedulerTaskTile(task: t),
-                )),
+            ...tasks.map(
+              (t) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: _SchedulerTaskTile(task: t),
+              ),
+            ),
         ],
       );
     });
@@ -289,7 +327,10 @@ class SettingsPage extends StatelessWidget {
       final maxMb = SettingsLogic.tierMax(tier);
       final stepMb = SettingsLogic.tierStep(tier);
       final divisions = (maxMb - minMb) ~/ stepMb;
-      final sliderValue = mb.toDouble().clamp(minMb.toDouble(), maxMb.toDouble());
+      final sliderValue = mb.toDouble().clamp(
+        minMb.toDouble(),
+        maxMb.toDouble(),
+      );
 
       // 显示值：>= 1024 MB 时换算成 GB
       final displayValue = mb >= 1024
@@ -318,11 +359,15 @@ class SettingsPage extends StatelessWidget {
                 // ── 标题 + 当前值 ──
                 Row(
                   children: [
-                    const Text('文件中转上限',
-                        style: TextStyle(color: Colors.white60, fontSize: 13)),
+                    const Text(
+                      '文件中转上限',
+                      style: TextStyle(color: Colors.white60, fontSize: 13),
+                    ),
                     const Spacer(),
-                    Text(displayValue,
-                        style: const TextStyle(color: Colors.white, fontSize: 13)),
+                    Text(
+                      displayValue,
+                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 10),
@@ -338,7 +383,9 @@ class SettingsPage extends StatelessWidget {
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 160),
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 4),
+                            horizontal: 14,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: selected
                                 ? AppColors.primary.withOpacity(0.18)
@@ -381,16 +428,16 @@ class SettingsPage extends StatelessWidget {
                     max: maxMb.toDouble(),
                     divisions: divisions,
                     value: sliderValue,
-                    onChanged: (v) =>
-                        logic.relayFileMaxMB.value = v.round(),
-                    onChangeEnd: (v) =>
-                        logic.setRelayFileMaxMB(v.round()),
+                    onChanged: (v) => logic.relayFileMaxMB.value = v.round(),
+                    onChangeEnd: (v) => logic.setRelayFileMaxMB(v.round()),
                   ),
                 ),
                 Text(
                   '超过此大小的文件不会通过中继传输（$rangeHint）',
                   style: TextStyle(
-                      color: Colors.white.withOpacity(0.3), fontSize: 11),
+                    color: Colors.white.withOpacity(0.3),
+                    fontSize: 11,
+                  ),
                 ),
               ],
             ),
@@ -408,30 +455,69 @@ class SettingsPage extends StatelessWidget {
       children: [
         const _SectionLabel('连接'),
         const SizedBox(height: 12),
-        Obx(() => _InfoTile(
-              label: '服务器',
-              value: ConnectionService().isConnected.value
-                  ? logic.serverUrl
-                  : '未连接',
-            )),
-        const SizedBox(height: 12),
-        Obx(() => ConnectionService().isConnected.value
-            ? SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  icon: const Icon(Icons.link_off, size: 16),
-                  label: const Text('断开连接'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.redAccent,
-                    side: const BorderSide(color: Colors.redAccent),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                  ),
-                  onPressed: logic.disconnect,
+        Obx(() {
+          final url = ConnectionService().isConnected.value
+              ? logic.serverUrl
+              : '未连接';
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.04),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.white.withOpacity(0.07)),
+            ),
+            child: Row(
+              children: [
+                const Text(
+                  '服务器',
+                  style: TextStyle(color: Colors.white60, fontSize: 13),
                 ),
-              )
-            : const SizedBox.shrink()),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    url,
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    textAlign: TextAlign.right,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                GestureDetector(
+                  onTap: () {
+                    Clipboard.setData(ClipboardData(text: url));
+                    HudTool.showInfo('Copied');
+                  },
+                  child: const Icon(
+                    Icons.copy_outlined,
+                    size: 14,
+                    color: Colors.white38,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
+        const SizedBox(height: 12),
+        Obx(
+          () => ConnectionService().isConnected.value
+              ? SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.link_off, size: 16),
+                    label: const Text('断开连接'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.redAccent,
+                      side: const BorderSide(color: Colors.redAccent),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    onPressed: logic.disconnect,
+                  ),
+                )
+              : const SizedBox.shrink(),
+        ),
       ],
     );
   }
@@ -488,8 +574,10 @@ class _InfoTile extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Text(label,
-              style: const TextStyle(color: Colors.white60, fontSize: 13)),
+          Text(
+            label,
+            style: const TextStyle(color: Colors.white60, fontSize: 13),
+          ),
           const Spacer(),
           Flexible(
             child: Text(
@@ -521,8 +609,10 @@ class _SettingsTile extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Text(label,
-              style: const TextStyle(color: Colors.white60, fontSize: 13)),
+          Text(
+            label,
+            style: const TextStyle(color: Colors.white60, fontSize: 13),
+          ),
           const Spacer(),
           child,
         ],
@@ -660,16 +750,19 @@ class _SchedulerTaskTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(name,
-                    style: TextStyle(
-                      color: enabled ? Colors.white : Colors.white38,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                    )),
+                Text(
+                  name,
+                  style: TextStyle(
+                    color: enabled ? Colors.white : Colors.white38,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text(schedule,
-                    style:
-                        const TextStyle(color: Colors.white30, fontSize: 11)),
+                Text(
+                  schedule,
+                  style: const TextStyle(color: Colors.white30, fontSize: 11),
+                ),
               ],
             ),
           ),

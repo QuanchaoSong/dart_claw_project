@@ -64,11 +64,12 @@ class ConnectionLogic extends GetxController {
   }
 
   Future<void> connectFromQr(String qrData) async {
+    debugPrint('[ConnectionLogic] Scanned QR data: $qrData');
     final uri = Uri.tryParse(qrData);
     if (uri == null || uri.host.isEmpty) {
       HudTool.showInfo('无效的二维码数据');
       return;
-    };
+    }
 
     // relay://host:port?room=securityCode
     if (uri.scheme == 'relay') {
@@ -165,7 +166,9 @@ class ConnectionLogic extends GetxController {
         Get.off(() => ChatPage(), transition: Transition.downToUp);
       } else {
         errorMessage.value = '连接失败，请检查中继地址、端口和安全码';
-        debugPrint('[ConnectionLogic] connectRelay failed: host=$host port=$port');
+        debugPrint(
+          '[ConnectionLogic] connectRelay failed: host=$host port=$port',
+        );
       }
     } catch (e) {
       errorMessage.value = '连接失败: $e';

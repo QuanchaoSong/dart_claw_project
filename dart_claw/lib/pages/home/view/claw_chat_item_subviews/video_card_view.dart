@@ -5,7 +5,6 @@ import 'package:dart_claw_core/dart_claw_core.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class VideoCardView extends StatefulWidget {
@@ -35,48 +34,9 @@ class _VideoCardViewState extends State<VideoCardView> {
     return s.startsWith('http://') || s.startsWith('https://');
   }
 
-  // ── Thumbnail ──────────────────────────────────────────────────────────
-
-  String? _thumbPath;
-  bool _thumbLoading = false;
-
   @override
   void initState() {
     super.initState();
-    if (widget.record.status == ClawToolStatus.success) {
-      _generateThumbnail();
-    }
-  }
-
-  Future<void> _generateThumbnail() async {
-    final src = _source;
-    if (src.isEmpty || _isUrl || !Platform.isMacOS) return;
-
-    setState(() => _thumbLoading = true);
-    try {
-      final tempDir = await getTemporaryDirectory();
-      final hash = src.hashCode.abs();
-      final thumbDirPath = p.join(tempDir.path, 'dc_vid_$hash');
-      await Directory(thumbDirPath).create(recursive: true);
-
-      // qlmanage -t generates a Quick Look thumbnail.
-      // Output: <thumbDirPath>/<basename>.png
-      await Process.run(
-        'qlmanage',
-        ['-t', '-s', '640', '-o', thumbDirPath, src],
-      );
-
-      final thumbFile = File(p.join(thumbDirPath, '${p.basename(src)}.png'));
-      final exists = await thumbFile.exists();
-      if (mounted) {
-        setState(() {
-          _thumbPath = exists ? thumbFile.path : null;
-          _thumbLoading = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _thumbLoading = false);
-    }
   }
 
   // ── Actions ────────────────────────────────────────────────────────────
@@ -114,40 +74,46 @@ class _VideoCardViewState extends State<VideoCardView> {
       ),
       child: switch (widget.record.status) {
         ClawToolStatus.pending || ClawToolStatus.running => const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CupertinoActivityIndicator(radius: 7),
-                SizedBox(width: 8),
-                Text('Loading video…',
-                    style: TextStyle(color: Colors.white54, fontSize: 12)),
-              ],
-            ),
+          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CupertinoActivityIndicator(radius: 7),
+              SizedBox(width: 8),
+              Text(
+                'Loading video…',
+                style: TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+            ],
           ),
+        ),
         ClawToolStatus.success => _buildSuccess(),
         _ => Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.videocam_off_outlined,
-                    size: 14, color: Colors.red),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    widget.record.result ?? 'Failed to load video',
-                    style: const TextStyle(
-                        color: Colors.red,
-                        fontSize: 12,
-                        fontFamily: 'monospace'),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.videocam_off_outlined,
+                size: 14,
+                color: Colors.red,
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  widget.record.result ?? 'Failed to load video',
+                  style: const TextStyle(
+                    color: Colors.red,
+                    fontSize: 12,
+                    fontFamily: 'monospace',
                   ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
+        ),
       },
     );
   }
@@ -164,8 +130,7 @@ class _VideoCardViewState extends State<VideoCardView> {
         GestureDetector(
           onTap: _openFullScreen,
           child: ClipRRect(
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(10)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
             child: AspectRatio(
               aspectRatio: 16 / 9,
               child: Stack(
@@ -180,11 +145,13 @@ class _VideoCardViewState extends State<VideoCardView> {
                       decoration: BoxDecoration(
                         color: Colors.black54,
                         shape: BoxShape.circle,
-                        border:
-                            Border.all(color: Colors.white38, width: 1.5),
+                        border: Border.all(color: Colors.white38, width: 1.5),
                       ),
-                      child: const Icon(Icons.play_arrow_rounded,
-                          color: Colors.white, size: 34),
+                      child: const Icon(
+                        Icons.play_arrow_rounded,
+                        color: Colors.white,
+                        size: 34,
+                      ),
                     ),
                   ),
                 ],
@@ -194,12 +161,10 @@ class _VideoCardViewState extends State<VideoCardView> {
         ),
         // ── Bottom bar: filename + action buttons ────────────────────
         Padding(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           child: Row(
             children: [
-              const Icon(Icons.movie_outlined,
-                  size: 14, color: Colors.white38),
+              const Icon(Icons.movie_outlined, size: 14, color: Colors.white38),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
@@ -238,8 +203,11 @@ class _VideoCardViewState extends State<VideoCardView> {
                   onTap: _openFullScreen,
                   child: const Padding(
                     padding: EdgeInsets.all(4),
-                    child: Icon(Icons.open_in_full,
-                        size: 16, color: Colors.white38),
+                    child: Icon(
+                      Icons.open_in_full,
+                      size: 16,
+                      color: Colors.white38,
+                    ),
                   ),
                 ),
               ),
@@ -251,33 +219,14 @@ class _VideoCardViewState extends State<VideoCardView> {
   }
 
   Widget _buildThumbnailContent() {
-    // URL source — no thumbnail, show placeholder.
     if (_isUrl) return _placeholder(Icons.language);
-
-    if (_thumbLoading) {
-      return Container(
-        color: Colors.black,
-        child: const Center(child: CupertinoActivityIndicator()),
-      );
-    }
-
-    if (_thumbPath != null) {
-      return Image.file(
-        File(_thumbPath!),
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => _placeholder(Icons.videocam_outlined),
-      );
-    }
-
     return _placeholder(Icons.videocam_outlined);
   }
 
   Widget _placeholder(IconData icon) {
     return Container(
       color: Colors.black,
-      child: Center(
-        child: Icon(icon, size: 40, color: Colors.white24),
-      ),
+      child: Center(child: Icon(icon, size: 40, color: Colors.white24)),
     );
   }
 }

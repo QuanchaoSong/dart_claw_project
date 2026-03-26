@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../others/general_ui/general_confirm_dialog.dart';
 import '../../others/network/http_digger.dart';
 import '../../others/network/ws_rpc.dart';
 import '../../others/services/connection_service.dart';
@@ -45,8 +46,10 @@ class SettingsLogic extends GetxController {
   void setRelayFileSizeTier(int tier) {
     relayFileSizeTier.value = tier;
     final step = tierStep(tier);
-    final snapped = ((relayFileMaxMB.value / step).round() * step)
-        .clamp(tierMin(tier), tierMax(tier));
+    final snapped = ((relayFileMaxMB.value / step).round() * step).clamp(
+      tierMin(tier),
+      tierMax(tier),
+    );
     relayFileMaxMB.value = snapped;
     setRelayFileMaxMB(snapped);
   }
@@ -78,33 +81,39 @@ class SettingsLogic extends GetxController {
       isLoading.value = true;
       loadError.value = null;
       try {
-        final results = await Future.wait([
-          WsRpc().call('get_config'),
-          WsRpc().call('get_scheduler'),
-        ]);
-        _applyConfig(results[0] as Map<String, dynamic>);
-        schedulerTasks.assignAll((results[1] as List).cast<Map<String, dynamic>>());
+        final config = await WsRpc().call('get_config');
+        _applyConfig(config as Map<String, dynamic>);
       } catch (e) {
         loadError.value = '加载失败: $e';
       } finally {
         isLoading.value = false;
       }
+      // Scheduler 单独加载，失败不影响主界面
+      WsRpc()
+          .call('get_scheduler')
+          .then((r) {
+            schedulerTasks.assignAll((r as List).cast<Map<String, dynamic>>());
+          })
+          .catchError((_) {});
       return;
     }
     isLoading.value = true;
     loadError.value = null;
     try {
-      final results = await Future.wait([
-        _http.getAsync('/config'),
-        _http.getAsync('/scheduler'),
-      ]);
-      _applyConfig(results[0] as Map<String, dynamic>);
-      schedulerTasks.assignAll((results[1] as List).cast<Map<String, dynamic>>());
+      final config = await _http.getAsync('/config');
+      _applyConfig(config as Map<String, dynamic>);
     } catch (e) {
       loadError.value = '加载失败: $e';
     } finally {
       isLoading.value = false;
     }
+    // Scheduler 单独加载，失败不影响主界面
+    _http
+        .getAsync('/scheduler')
+        .then((r) {
+          schedulerTasks.assignAll((r as List).cast<Map<String, dynamic>>());
+        })
+        .catchError((_) {});
   }
 
   void _applyConfig(Map<String, dynamic> data) {
@@ -129,7 +138,8 @@ class SettingsLogic extends GetxController {
 
   void _updateAvailableModels() {
     final p = availableProviders.firstWhereOrNull(
-        (e) => e['name'] == provider.value);
+      (e) => e['name'] == provider.value,
+    );
     final models = (p?['models'] as List?)?.cast<String>() ?? [];
     availableModels.assignAll(models);
   }
@@ -147,29 +157,39 @@ class SettingsLogic extends GetxController {
   }
 
   Future<void> setProvider(String name) async {
-    await _postConfig({'ai_model': {'provider': name}});
+    await _postConfig({
+      'ai_model': {'provider': name},
+    });
   }
 
   Future<void> setModel(String id) async {
-    await _postConfig({'ai_model': {'modelId': id}});
+    await _postConfig({
+      'ai_model': {'modelId': id},
+    });
   }
 
   Future<void> applyTemperature() async {
     final v = double.tryParse(temperatureController.text.trim());
     if (v == null || v < 0 || v > 2) return;
-    await _postConfig({'ai_model': {'temperature': v}});
+    await _postConfig({
+      'ai_model': {'temperature': v},
+    });
   }
 
   Future<void> applyMaxTokens() async {
     final v = int.tryParse(maxTokensController.text.trim());
     if (v == null || v < 1) return;
-    await _postConfig({'ai_model': {'maxTokens': v}});
+    await _postConfig({
+      'ai_model': {'maxTokens': v},
+    });
   }
 
   Future<void> applyMaxRounds() async {
     final v = int.tryParse(maxRoundsController.text.trim());
     if (v == null || v < 1) return;
-    await _postConfig({'session': {'maxRounds': v}});
+    await _postConfig({
+      'session': {'maxRounds': v},
+    });
   }
 
   /// 设置中继文件大小上限（MB），通过 WebSocket 发送到桌面端。
@@ -183,7 +203,16 @@ class SettingsLogic extends GetxController {
     });
   }
 
-  void disconnect() {
+  Future<void> disconnect() async {
+    final ctx = Get.context;
+    if (ctx == null) return;
+    final confirmed = await ConfirmDialog.show(
+      ctx,
+      title: '断开连接',
+      message: '确定要断开与桌面端的连接吗？',
+      destructiveLabel: '断开',
+    );
+    if (!confirmed) return;
     _conn.disconnect();
     Get.offAll(() => ConnectionPage(), transition: Transition.downToUp);
   }

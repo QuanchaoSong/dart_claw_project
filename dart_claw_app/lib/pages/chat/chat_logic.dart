@@ -14,6 +14,7 @@ import 'dialog/sudo_prompt_dialog.dart';
 import 'model/remote_message_info.dart';
 import 'model/skill_item_info.dart';
 import '../../others/services/connection_service.dart';
+import '../../others/network/ws_rpc.dart';
 import '../../others/tool/database_tool.dart';
 import '../connection/connection_page.dart';
 
@@ -159,12 +160,14 @@ class ChatLogic extends GetxController {
         return;
       }
     }
-    messages.add(RemoteMessageInfo.tool(
-      toolId: toolId,
-      toolName: name,
-      toolStatus: status,
-      args: args,
-    ));
+    messages.add(
+      RemoteMessageInfo.tool(
+        toolId: toolId,
+        toolName: name,
+        toolStatus: status,
+        args: args,
+      ),
+    );
   }
 
   void _onConfirmRequest(Map<String, dynamic> data) {
@@ -222,7 +225,8 @@ class ChatLogic extends GetxController {
     if (_sessionId == null) return;
     for (final msg in messages) {
       if (msg.type == RemoteMessageInfoType.confirm) continue;
-      if (msg.type == RemoteMessageInfoType.assistant && msg.isStreaming) continue;
+      if (msg.type == RemoteMessageInfoType.assistant && msg.isStreaming)
+        continue;
       DatabaseTool().upsertMessage(_sessionId!, msg);
     }
   }
@@ -260,7 +264,8 @@ class ChatLogic extends GetxController {
     final id = data['id'] as String? ?? '';
     final question = data['question'] as String? ?? '';
     final type = data['input_type'] as String? ?? 'text';
-    final options = (data['options'] as List<dynamic>?)
+    final options =
+        (data['options'] as List<dynamic>?)
             ?.map((e) => e.toString())
             .toList() ??
         const <String>[];
@@ -346,8 +351,11 @@ class ChatLogic extends GetxController {
 
   /// 提交 sudo 密码给桌面端
   void respondSudoPassword(String id, String password) {
-    ConnectionService()
-        .send({'type': 'sudo_input', 'id': id, 'password': password});
+    ConnectionService().send({
+      'type': 'sudo_input',
+      'id': id,
+      'password': password,
+    });
   }
 
   void _scrollToBottom() {
@@ -388,8 +396,11 @@ class ChatLogic extends GetxController {
     messages.add(assistantMsg);
     isRunning.value = true;
 
-    ConnectionService()
-        .send({'type': 'task', 'session_id': _sessionId, 'content': text});
+    ConnectionService().send({
+      'type': 'task',
+      'session_id': _sessionId,
+      'content': text,
+    });
     _scrollToBottom();
   }
 
@@ -411,10 +422,14 @@ class ChatLogic extends GetxController {
   }
 
   void confirmTool(String requestId, {required bool approved}) {
-    ConnectionService()
-        .send({'type': 'confirm', 'id': requestId, 'approved': approved});
+    ConnectionService().send({
+      'type': 'confirm',
+      'id': requestId,
+      'approved': approved,
+    });
     messages.removeWhere(
-      (m) => m.type == RemoteMessageInfoType.confirm && m.confirmId == requestId,
+      (m) =>
+          m.type == RemoteMessageInfoType.confirm && m.confirmId == requestId,
     );
   }
 
@@ -426,7 +441,11 @@ class ChatLogic extends GetxController {
   // ── 设置同步 ───────────────────────────────────────────────────────────────
 
   void setSetting(String key, dynamic value) {
-    ConnectionService().send({'type': 'set_setting', 'key': key, 'value': value});
+    ConnectionService().send({
+      'type': 'set_setting',
+      'key': key,
+      'value': value,
+    });
     // 乐观更新本地状态
     switch (key) {
       case 'allow_all_tools':
@@ -445,7 +464,10 @@ class ChatLogic extends GetxController {
 
   /// 将 sudo 密码推送到桌面端写入其本地存储
   void setSudoPasswordSetting(String password) {
-    ConnectionService().send({'type': 'set_sudo_password', 'password': password});
+    ConnectionService().send({
+      'type': 'set_sudo_password',
+      'password': password,
+    });
   }
 
   // ── 手机→桌面 文件上传 ─────────────────────────────────────────────────────
@@ -507,13 +529,19 @@ class ChatLogic extends GetxController {
 
   /// 直连模式：上传到桌面端 HTTP /upload。
   Future<void> _uploadDirect(
-      String filePath, String fileName, int fileSize, String? requestId) async {
+    String filePath,
+    String fileName,
+    int fileSize,
+    String? requestId,
+  ) async {
     final host = ConnectionService().serverHost.value;
     final port = ConnectionService().serverPort.value;
-    final requestIdParam =
-        requestId != null ? '&request_id=${Uri.encodeComponent(requestId)}' : '';
+    final requestIdParam = requestId != null
+        ? '&request_id=${Uri.encodeComponent(requestId)}'
+        : '';
     final uri = Uri.parse(
-        'http://$host:$port/upload?name=${Uri.encodeComponent(fileName)}$requestIdParam');
+      'http://$host:$port/upload?name=${Uri.encodeComponent(fileName)}$requestIdParam',
+    );
 
     final client = HttpClient();
     client.connectionTimeout = const Duration(seconds: 10);
@@ -551,12 +579,17 @@ class ChatLogic extends GetxController {
 
   /// 中继模式：上传到中继服务器 /files，再通过 WS 通知桌面端下载。
   Future<void> _uploadViaRelay(
-      String filePath, String fileName, int fileSize, String? requestId) async {
+    String filePath,
+    String fileName,
+    int fileSize,
+    String? requestId,
+  ) async {
     final conn = ConnectionService();
     final baseUrl = conn.relayBaseUrl;
     final roomId = conn.relayRoom;
     final uri = Uri.parse(
-        '$baseUrl/files?room=${Uri.encodeComponent(roomId)}&name=${Uri.encodeComponent(fileName)}');
+      '$baseUrl/files?room=${Uri.encodeComponent(roomId)}&name=${Uri.encodeComponent(fileName)}',
+    );
 
     final client = HttpClient();
     client.connectionTimeout = const Duration(seconds: 10);
@@ -602,25 +635,35 @@ class ChatLogic extends GetxController {
     }
   }
 
-  /// 向桌面端 HTTP /skills 接口拉取已安装 Skill 列表。
+  /// 向桌面端拉取已安装 Skill 列表。
+  /// 直连模式：HTTP /skills；中继模式：WsRpc get_skills。
   Future<void> fetchSkills() async {
-    if (!ConnectionService().isConnected.value) return;
-    final host = ConnectionService().serverHost.value;
-    final port = ConnectionService().serverPort.value;
+    final conn = ConnectionService();
+    if (!conn.isConnected.value) return;
     try {
-      final client = HttpClient();
-      client.connectionTimeout = const Duration(seconds: 5);
-      final request =
-          await client.getUrl(Uri.parse('http://$host:$port/skills'));
-      final response = await request.close();
-      final body = await response.transform(const Utf8Decoder()).join();
-      client.close();
-      final list = jsonDecode(body) as List<dynamic>;
+      List<dynamic> list;
+      if (conn.isRelayMode.value) {
+        list = await WsRpc().call('get_skills') as List<dynamic>;
+      } else {
+        final host = conn.serverHost.value;
+        final port = conn.serverPort.value;
+        final client = HttpClient();
+        client.connectionTimeout = const Duration(seconds: 5);
+        final request = await client.getUrl(
+          Uri.parse('http://$host:$port/skills'),
+        );
+        final response = await request.close();
+        final body = await response.transform(const Utf8Decoder()).join();
+        client.close();
+        list = jsonDecode(body) as List<dynamic>;
+      }
       availableSkills.assignAll(
-        list.map((e) => SkillItemInfo(
-              name: e['name'] as String? ?? '',
-              description: e['description'] as String? ?? '',
-            )),
+        list.map(
+          (e) => SkillItemInfo(
+            name: e['name'] as String? ?? '',
+            description: e['description'] as String? ?? '',
+          ),
+        ),
       );
     } catch (_) {
       // 静默失败；availableSkills 保持上次值
@@ -654,6 +697,3 @@ class ChatLogic extends GetxController {
     if (_sessionId == session.id) newSession();
   }
 }
-
-
-

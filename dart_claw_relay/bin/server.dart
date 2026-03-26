@@ -47,3 +47,8 @@ Future<void> main(List<String> args) async {
     });
   }
 }
+
+
+// dart compile exe bin/server.dart -o my_server
+// // 在 MacOS 上直接编译到 linux 平台上
+// dart compile exe --target-os=linux --target-arch=x64 bin/server.dart -o my_server
