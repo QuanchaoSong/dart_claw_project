@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../others/network/http_digger.dart';
+import '../../others/network/ws_rpc.dart';
 import '../../others/services/connection_service.dart';
 import '../connection/connection_page.dart';
 
@@ -37,7 +38,7 @@ class SettingsLogic extends GetxController {
   final relayFileSizeTier = 1.obs;
 
   static int tierMin(int t) => const [5, 50, 500][t];
-  static int tierMax(int t) => const [200, 1000, 5000][t];
+  static int tierMax(int t) => const [200, 1000, 5500][t];
   static int tierStep(int t) => const [5, 50, 500][t];
 
   /// 切换档位时把当前值 snap 到新区间（不复位）。
@@ -74,8 +75,20 @@ class SettingsLogic extends GetxController {
 
   Future<void> loadAll() async {
     if (isRelayMode) {
-      // 中继模式下无法直接 HTTP 调用桌面端，跳过加载
-      isLoading.value = false;
+      isLoading.value = true;
+      loadError.value = null;
+      try {
+        final results = await Future.wait([
+          WsRpc().call('get_config'),
+          WsRpc().call('get_scheduler'),
+        ]);
+        _applyConfig(results[0] as Map<String, dynamic>);
+        schedulerTasks.assignAll((results[1] as List).cast<Map<String, dynamic>>());
+      } catch (e) {
+        loadError.value = '加载失败: $e';
+      } finally {
+        isLoading.value = false;
+      }
       return;
     }
     isLoading.value = true;
@@ -123,45 +136,40 @@ class SettingsLogic extends GetxController {
 
   // ── 修改操作 ──
 
-  Future<void> setProvider(String name) async {
-    final result = await _http.postAsync('/config', {
-      'ai_model': {'provider': name},
-    });
+  Future<void> _postConfig(Map<String, dynamic> body) async {
+    final dynamic result;
+    if (isRelayMode) {
+      result = await WsRpc().call('set_config', body);
+    } else {
+      result = await _http.postAsync('/config', body);
+    }
     _applyConfig(result as Map<String, dynamic>);
   }
 
+  Future<void> setProvider(String name) async {
+    await _postConfig({'ai_model': {'provider': name}});
+  }
+
   Future<void> setModel(String id) async {
-    final result = await _http.postAsync('/config', {
-      'ai_model': {'modelId': id},
-    });
-    _applyConfig(result as Map<String, dynamic>);
+    await _postConfig({'ai_model': {'modelId': id}});
   }
 
   Future<void> applyTemperature() async {
     final v = double.tryParse(temperatureController.text.trim());
     if (v == null || v < 0 || v > 2) return;
-    final result = await _http.postAsync('/config', {
-      'ai_model': {'temperature': v},
-    });
-    _applyConfig(result as Map<String, dynamic>);
+    await _postConfig({'ai_model': {'temperature': v}});
   }
 
   Future<void> applyMaxTokens() async {
     final v = int.tryParse(maxTokensController.text.trim());
     if (v == null || v < 1) return;
-    final result = await _http.postAsync('/config', {
-      'ai_model': {'maxTokens': v},
-    });
-    _applyConfig(result as Map<String, dynamic>);
+    await _postConfig({'ai_model': {'maxTokens': v}});
   }
 
   Future<void> applyMaxRounds() async {
     final v = int.tryParse(maxRoundsController.text.trim());
     if (v == null || v < 1) return;
-    final result = await _http.postAsync('/config', {
-      'session': {'maxRounds': v},
-    });
-    _applyConfig(result as Map<String, dynamic>);
+    await _postConfig({'session': {'maxRounds': v}});
   }
 
   /// 设置中继文件大小上限（MB），通过 WebSocket 发送到桌面端。

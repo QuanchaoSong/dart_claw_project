@@ -127,14 +127,12 @@ class SettingsPage extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       children: [
-        if (!isRelay) ...[
-          _buildAiModelSection(logic),
-          const SizedBox(height: 28),
-          _buildSessionSection(logic),
-          const SizedBox(height: 28),
-          _buildSchedulerSection(logic),
-          const SizedBox(height: 28),
-        ],
+        _buildAiModelSection(logic),
+        const SizedBox(height: 28),
+        _buildSessionSection(logic),
+        const SizedBox(height: 28),
+        _buildSchedulerSection(logic),
+        const SizedBox(height: 28),
         if (isRelay) ...[
           _buildRelaySection(logic),
           const SizedBox(height: 28),

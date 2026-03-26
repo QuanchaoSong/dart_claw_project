@@ -414,8 +414,43 @@ class LocalServer {
       case 'relay_file_uploaded':
         _handleRelayFileUploaded(msg);
         break;
+      case 'rpc_call':
+        _handleRpcCall(ws, msg);
+        break;
       default:
         print('[LocalServer] Unknown message type: ${msg['type']}');
+    }
+  }
+
+  /// 处理移动端通过 WebSocket 发来的 RPC 调用（relay 模式下替代 HTTP）。
+  Future<void> _handleRpcCall(WebSocket? ws, Map<String, dynamic> msg) async {
+    final requestId = msg['request_id'] as String? ?? '';
+    final method = msg['method'] as String? ?? '';
+    final params = msg['params'] as Map<String, dynamic>? ?? {};
+
+    void reply(Map<String, dynamic> payload) {
+      final response = {'type': 'rpc_response', 'request_id': requestId, ...payload};
+      if (ws != null) {
+        _send(ws, response);
+      } else {
+        _relaySend(response);
+      }
+    }
+
+    try {
+      switch (method) {
+        case 'get_config':
+          reply({'data': RemoteHttpHandler.buildConfigData()});
+        case 'set_config':
+          final result = await RemoteHttpHandler.applyConfigData(params);
+          reply({'data': result});
+        case 'get_scheduler':
+          reply({'data': RemoteHttpHandler.buildSchedulerData()});
+        default:
+          reply({'error': 'Unknown RPC method: $method'});
+      }
+    } catch (e) {
+      reply({'error': '$e'});
     }
   }
 

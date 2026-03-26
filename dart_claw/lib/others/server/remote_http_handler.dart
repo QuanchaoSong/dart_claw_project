@@ -153,12 +153,12 @@ class RemoteHttpHandler {
     await request.response.close();
   }
 
-  // ── 配置读取 (GET /config) ─────────────────────────────────────────────
+  // ── 配置数据（HTTP + WS RPC 共用）────────────────────────────────────────
 
-  static Future<void> serveConfig(HttpRequest request) async {
+  /// 返回当前配置的结构化数据，供 HTTP 和 WS RPC 双通道共用。
+  static Map<String, dynamic> buildConfigData() {
     final cfg = AppConfigService.shared.config.value;
     final activeModel = cfg.model;
-
     final providers = <Map<String, dynamic>>[];
     for (final p in AIProvider.values) {
       providers.add({
@@ -167,8 +167,7 @@ class RemoteHttpHandler {
         'models': kProviderModels[p] ?? [],
       });
     }
-
-    final json = jsonEncode({
+    return {
       'ai_model': {
         'provider': activeModel.provider.name,
         'providerDisplayName': activeModel.provider.displayName,
@@ -180,13 +179,69 @@ class RemoteHttpHandler {
       'session': {
         'maxRounds': cfg.session.maxRounds,
       },
-    });
+    };
+  }
 
+  /// 应用配置变更，返回更新后的完整配置数据。
+  static Future<Map<String, dynamic>> applyConfigData(
+    Map<String, dynamic> data,
+  ) async {
+    final svc = AppConfigService.shared;
+    final cfg = svc.config.value;
+
+    if (data.containsKey('ai_model')) {
+      final m = data['ai_model'] as Map<String, dynamic>;
+      final providerName = m['provider'] as String?;
+      final provider = providerName != null
+          ? AIProvider.fromString(providerName)
+          : cfg.model.provider;
+      final existing =
+          cfg.providerConfigs[provider] ?? AIModelSettingsInfo(provider: provider);
+      await svc.saveModelSettings(existing.copyWith(
+        provider: provider,
+        modelId: m['modelId'] as String? ?? existing.modelId,
+        temperature: (m['temperature'] as num?)?.toDouble(),
+        maxTokens: m['maxTokens'] as int?,
+      ));
+    }
+
+    if (data.containsKey('session')) {
+      final s = data['session'] as Map<String, dynamic>;
+      await svc.saveSessionSettings(cfg.session.copyWith(
+        maxRounds: s['maxRounds'] as int?,
+      ));
+    }
+
+    return buildConfigData();
+  }
+
+  /// 返回当前调度任务列表，供 HTTP 和 WS RPC 双通道共用。
+  static List<Map<String, dynamic>> buildSchedulerData() {
+    const weekdayNames = [
+      '', '周一', '周二', '周三', '周四', '周五', '周六', '周日',
+    ];
+    return SchedulerService.instance.tasks.map((t) => {
+      'id': t.id,
+      'name': t.name,
+      'mode': t.mode.name,
+      'time':
+          '${t.time.hour.toString().padLeft(2, '0')}:${t.time.minute.toString().padLeft(2, '0')}',
+      'weekdays': t.weekdays.map((d) => weekdayNames[d]).toList(),
+      'actionType': t.actionType.name,
+      'isEnabled': t.isEnabled,
+      'lastRunAt': t.lastRunAt?.toIso8601String(),
+      'nextRunAt': t.nextRunAt?.toIso8601String(),
+    }).toList();
+  }
+
+  // ── 配置读取 (GET /config) ─────────────────────────────────────────────
+
+  static Future<void> serveConfig(HttpRequest request) async {
     request.response
       ..statusCode = HttpStatus.ok
       ..headers.set('Content-Type', 'application/json; charset=utf-8')
       ..headers.set('Access-Control-Allow-Origin', '*')
-      ..write(json);
+      ..write(jsonEncode(buildConfigData()));
     await request.response.close();
   }
 
@@ -196,70 +251,30 @@ class RemoteHttpHandler {
     try {
       final body = await utf8.decoder.bind(request).join();
       final data = jsonDecode(body) as Map<String, dynamic>;
-      final svc = AppConfigService.shared;
-      final cfg = svc.config.value;
-
-      if (data.containsKey('ai_model')) {
-        final m = data['ai_model'] as Map<String, dynamic>;
-        final providerName = m['provider'] as String?;
-        final provider = providerName != null
-            ? AIProvider.fromString(providerName)
-            : cfg.model.provider;
-        final existing = cfg.providerConfigs[provider] ??
-            AIModelSettingsInfo(provider: provider);
-        await svc.saveModelSettings(existing.copyWith(
-          provider: provider,
-          modelId: m['modelId'] as String? ?? existing.modelId,
-          temperature: (m['temperature'] as num?)?.toDouble(),
-          maxTokens: m['maxTokens'] as int?,
-        ));
-      }
-
-      if (data.containsKey('session')) {
-        final s = data['session'] as Map<String, dynamic>;
-        await svc.saveSessionSettings(cfg.session.copyWith(
-          maxRounds: s['maxRounds'] as int?,
-        ));
-      }
-
-      await serveConfig(request);
+      final result = await applyConfigData(data);
+      request.response
+        ..statusCode = HttpStatus.ok
+        ..headers.set('Content-Type', 'application/json; charset=utf-8')
+        ..headers.set('Access-Control-Allow-Origin', '*')
+        ..write(jsonEncode(result));
     } catch (e) {
       request.response
         ..statusCode = HttpStatus.badRequest
         ..headers.set('Content-Type', 'application/json; charset=utf-8')
         ..write(jsonEncode({'error': '$e'}));
-      await request.response.close();
     }
+    await request.response.close();
   }
 
   // ── 定时任务列表 (GET /scheduler) ──────────────────────────────────────
 
   static Future<void> serveScheduler(HttpRequest request) async {
     try {
-      final tasks = SchedulerService.instance.tasks;
-      final list = tasks.map((t) {
-        const weekdayNames = [
-          '', '周一', '周二', '周三', '周四', '周五', '周六', '周日'
-        ];
-        return {
-          'id': t.id,
-          'name': t.name,
-          'mode': t.mode.name,
-          'time':
-              '${t.time.hour.toString().padLeft(2, '0')}:${t.time.minute.toString().padLeft(2, '0')}',
-          'weekdays': t.weekdays.map((d) => weekdayNames[d]).toList(),
-          'actionType': t.actionType.name,
-          'isEnabled': t.isEnabled,
-          'lastRunAt': t.lastRunAt?.toIso8601String(),
-          'nextRunAt': t.nextRunAt?.toIso8601String(),
-        };
-      }).toList();
-
       request.response
         ..statusCode = HttpStatus.ok
         ..headers.set('Content-Type', 'application/json; charset=utf-8')
         ..headers.set('Access-Control-Allow-Origin', '*')
-        ..write(jsonEncode(list));
+        ..write(jsonEncode(buildSchedulerData()));
     } catch (_) {
       request.response
         ..statusCode = HttpStatus.ok
