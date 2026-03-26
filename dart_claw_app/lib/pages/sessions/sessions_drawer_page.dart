@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
-import '../../others/constants/color_constants.dart';
-import '../chat/chat_logic.dart';
-import '../settings/settings_page.dart';
 import 'package:get/get.dart';
 
-class SessionsDrawerView extends StatelessWidget {
-  const SessionsDrawerView({super.key});
+import '../../others/constants/color_constants.dart';
+import '../settings/settings_page.dart';
+import 'sessions_drawer_logic.dart';
+import 'view/session_list_item_view.dart';
+
+class SessionsDrawerPage extends StatelessWidget {
+  const SessionsDrawerPage({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final logic = Get.put(SessionsDrawerLogic());
     return Drawer(
       backgroundColor: AppColors.bgMid,
       child: SafeArea(
@@ -16,9 +19,9 @@ class SessionsDrawerView extends StatelessWidget {
           children: [
             _buildHeader(context),
             const Divider(color: Colors.white12, height: 1),
-            _buildNewChatButton(context),
+            _buildNewChatButton(context, logic),
             const Divider(color: Colors.white12, height: 1),
-            Expanded(child: _buildSessionList(context)),
+            Expanded(child: _buildSessionList(context, logic)),
           ],
         ),
       ),
@@ -46,7 +49,6 @@ class SessionsDrawerView extends StatelessWidget {
                 color: Colors.white54, size: 20),
             tooltip: '设置',
             onPressed: () {
-              // Close drawer first, then slide in settings from the right.
               Navigator.of(context).pop();
               openSettings(context);
             },
@@ -58,7 +60,7 @@ class SessionsDrawerView extends StatelessWidget {
 
   // ── New chat button ────────────────────────────────────────────────────────
 
-  Widget _buildNewChatButton(BuildContext context) {
+  Widget _buildNewChatButton(BuildContext context, SessionsDrawerLogic logic) {
     return Padding(
       padding: const EdgeInsets.all(12),
       child: SizedBox(
@@ -75,7 +77,7 @@ class SessionsDrawerView extends StatelessWidget {
           ),
           onPressed: () {
             Navigator.of(context).pop();
-            Get.find<ChatLogic>().newSession();
+            logic.newSession();
           },
         ),
       ),
@@ -84,8 +86,7 @@ class SessionsDrawerView extends StatelessWidget {
 
   // ── Session list ──────────────────────────────────────────────────────────
 
-  Widget _buildSessionList(BuildContext context) {
-    final logic = Get.find<ChatLogic>();
+  Widget _buildSessionList(BuildContext context, SessionsDrawerLogic logic) {
     return Obx(() {
       final sessions = logic.sessions;
       if (sessions.isEmpty) {
@@ -123,7 +124,7 @@ class SessionsDrawerView extends StatelessWidget {
                   color: Colors.white, size: 20),
             ),
             onDismissed: (_) => logic.deleteSession(session),
-            child: SessionListItem(
+            child: SessionListItemView(
               title: session.title,
               updatedAt: session.updatedAt,
               isActive: false,
@@ -136,55 +137,5 @@ class SessionsDrawerView extends StatelessWidget {
         },
       );
     });
-  }
-}
-
-// ─── Session list item (used once sessions come from WS) ──────────────────────
-
-class SessionListItem extends StatelessWidget {
-  const SessionListItem({
-    super.key,
-    required this.title,
-    required this.updatedAt,
-    required this.isActive,
-    required this.onTap,
-  });
-
-  final String title;
-  final DateTime updatedAt;
-  final bool isActive;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-      selected: isActive,
-      selectedTileColor: AppColors.primary.withOpacity(0.15),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      title: Text(
-        title,
-        style: TextStyle(
-          fontSize: 14,
-          color: isActive ? Colors.white : Colors.white70,
-          fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-        ),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      subtitle: Text(
-        _formatTime(updatedAt),
-        style: const TextStyle(fontSize: 11, color: Colors.white30),
-      ),
-      onTap: onTap,
-    );
-  }
-
-  String _formatTime(DateTime dt) {
-    final now = DateTime.now();
-    final diff = now.difference(dt);
-    if (diff.inMinutes < 60) return '${diff.inMinutes}分钟前';
-    if (diff.inHours < 24) return '${diff.inHours}小时前';
-    return '${dt.month}/${dt.day}';
   }
 }

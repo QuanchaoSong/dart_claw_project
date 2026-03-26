@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:dart_claw_app/others/tool/global_tool.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -8,6 +9,8 @@ import '../dialog/skill_picker_dialog.dart';
 /// 从底部滑出的 Session Info & Settings 面板。
 /// 通过 showSessionInfoAndSettingsView(context) 打开。
 void showSessionInfoAndSettingsView(BuildContext context) {
+  hideKeyboard(context);
+
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,

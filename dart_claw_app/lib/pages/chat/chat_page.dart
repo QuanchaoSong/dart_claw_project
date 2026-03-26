@@ -1,7 +1,8 @@
+import 'package:dart_claw_app/others/tool/global_tool.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-import '../sessions/sessions_drawer_view.dart';
+import '../sessions/sessions_drawer_page.dart';
 import 'chat_logic.dart';
 import 'view/input_area_view.dart';
 import 'view/message_list_view.dart';
@@ -15,7 +16,7 @@ class ChatPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      drawer: const SessionsDrawerView(),
+      drawer: const SessionsDrawerPage(),
       appBar: AppBar(
         leading: Builder(
           builder: (ctx) => IconButton(
@@ -43,7 +44,7 @@ class ChatPage extends StatelessWidget {
         ],
       ),
       body: GestureDetector(
-        onTap: () => FocusScope.of(context).unfocus(),
+        onTap: () => hideKeyboard(context),
         behavior: HitTestBehavior.opaque,
         child: Column(
           children: [
