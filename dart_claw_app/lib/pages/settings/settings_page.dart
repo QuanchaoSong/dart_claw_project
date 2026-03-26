@@ -286,6 +286,22 @@ class SettingsPage extends StatelessWidget {
   Widget _buildRelaySection(SettingsLogic logic) {
     return Obx(() {
       final mb = logic.relayFileMaxMB.value;
+      final tier = logic.relayFileSizeTier.value;
+      final minMb = SettingsLogic.tierMin(tier);
+      final maxMb = SettingsLogic.tierMax(tier);
+      final stepMb = SettingsLogic.tierStep(tier);
+      final divisions = (maxMb - minMb) ~/ stepMb;
+      final sliderValue = mb.toDouble().clamp(minMb.toDouble(), maxMb.toDouble());
+
+      // 显示值：>= 1024 MB 时换算成 GB
+      final displayValue = mb >= 1024
+          ? '${mb % 1024 == 0 ? mb ~/ 1024 : (mb / 1024).toStringAsFixed(1)} GB'
+          : '$mb MB';
+
+      // 区间提示
+      final maxLabel = maxMb >= 1024 ? '${maxMb ~/ 1024} GB' : '$maxMb MB';
+      final rangeHint = '$minMb MB – $maxLabel';
+
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -301,18 +317,59 @@ class SettingsPage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // ── 标题 + 当前值 ──
                 Row(
                   children: [
                     const Text('文件中转上限',
-                        style:
-                            TextStyle(color: Colors.white60, fontSize: 13)),
+                        style: TextStyle(color: Colors.white60, fontSize: 13)),
                     const Spacer(),
-                    Text('$mb MB',
-                        style: const TextStyle(
-                            color: Colors.white, fontSize: 13)),
+                    Text(displayValue,
+                        style: const TextStyle(color: Colors.white, fontSize: 13)),
                   ],
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 10),
+                // ── 档位选择器 ──
+                Row(
+                  children: List.generate(3, (i) {
+                    final labels = ['小', '中', '大'];
+                    final selected = tier == i;
+                    return Padding(
+                      padding: EdgeInsets.only(right: i < 2 ? 6 : 0),
+                      child: GestureDetector(
+                        onTap: () => logic.setRelayFileSizeTier(i),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 160),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? AppColors.primary.withOpacity(0.18)
+                                : Colors.white.withOpacity(0.05),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: selected
+                                  ? AppColors.primary.withOpacity(0.7)
+                                  : Colors.white.withOpacity(0.12),
+                            ),
+                          ),
+                          child: Text(
+                            labels[i],
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: selected
+                                  ? AppColors.primary
+                                  : Colors.white38,
+                              fontWeight: selected
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+                // ── 滑块 ──
                 SliderTheme(
                   data: SliderThemeData(
                     activeTrackColor: AppColors.primary,
@@ -322,10 +379,10 @@ class SettingsPage extends StatelessWidget {
                     trackHeight: 3,
                   ),
                   child: Slider(
-                    min: 1,
-                    max: 100,
-                    divisions: 99,
-                    value: mb.toDouble(),
+                    min: minMb.toDouble(),
+                    max: maxMb.toDouble(),
+                    divisions: divisions,
+                    value: sliderValue,
                     onChanged: (v) =>
                         logic.relayFileMaxMB.value = v.round(),
                     onChangeEnd: (v) =>
@@ -333,7 +390,7 @@ class SettingsPage extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '超过此大小的文件不会通过中继传输',
+                  '超过此大小的文件不会通过中继传输（$rangeHint）',
                   style: TextStyle(
                       color: Colors.white.withOpacity(0.3), fontSize: 11),
                 ),

@@ -1,3 +1,4 @@
+import 'package:dart_claw_app/others/tool/global_tool.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -71,7 +72,7 @@ class ConnectionPage extends StatelessWidget {
       ),
     );
 
-    return GestureDetector(onTap: () => FocusScope.of(context).unfocus(), behavior: HitTestBehavior.opaque, child: c);
+    return GestureDetector(onTap: () => hideKeyboard(context), behavior: HitTestBehavior.opaque, child: c);
   }
 
   // ── Logo ──────────────────────────────────────────────────────────────────

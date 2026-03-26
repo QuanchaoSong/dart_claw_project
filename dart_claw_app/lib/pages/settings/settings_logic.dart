@@ -32,7 +32,23 @@ class SettingsLogic extends GetxController {
   final schedulerTasks = <Map<String, dynamic>>[].obs;
 
   // ── Relay ──
-  final relayFileMaxMB = 20.obs; // 默认 20 MB
+  final relayFileMaxMB = 100.obs; // 默认 100 MB
+  /// 档位：0=小(5–200MB) / 1=中(50MB–1GB) / 2=大(500MB–5GB)
+  final relayFileSizeTier = 1.obs;
+
+  static int tierMin(int t) => const [5, 50, 500][t];
+  static int tierMax(int t) => const [200, 1000, 5000][t];
+  static int tierStep(int t) => const [5, 50, 500][t];
+
+  /// 切换档位时把当前值 snap 到新区间（不复位）。
+  void setRelayFileSizeTier(int tier) {
+    relayFileSizeTier.value = tier;
+    final step = tierStep(tier);
+    final snapped = ((relayFileMaxMB.value / step).round() * step)
+        .clamp(tierMin(tier), tierMax(tier));
+    relayFileMaxMB.value = snapped;
+    setRelayFileMaxMB(snapped);
+  }
 
   // ── Controllers ──
   late final TextEditingController temperatureController;
