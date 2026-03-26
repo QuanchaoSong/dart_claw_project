@@ -15,6 +15,7 @@ import 'model/remote_message_info.dart';
 import 'model/skill_item_info.dart';
 import '../../others/services/connection_service.dart';
 import '../../others/tool/database_tool.dart';
+import '../connection/connection_page.dart';
 
 class ChatLogic extends GetxController {
   final inputController = TextEditingController();
@@ -58,6 +59,12 @@ class ChatLogic extends GetxController {
     super.onInit();
     _sub = ConnectionService().incomingMessages.listen(_handleRemoteMessage);
     _loadSessions();
+    // WS 断开时自动跳回连接页
+    ever(ConnectionService().isConnected, (bool connected) {
+      if (!connected) {
+        Get.offAll(() => ConnectionPage(), transition: Transition.downToUp);
+      }
+    });
   }
 
   @override

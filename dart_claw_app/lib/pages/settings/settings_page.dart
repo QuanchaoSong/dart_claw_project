@@ -125,6 +125,7 @@ class SettingsPage extends StatelessWidget {
     final isRelay = logic.isRelayMode;
     return ListView(
       padding: const EdgeInsets.all(20),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       children: [
         if (!isRelay) ...[
           _buildAiModelSection(logic),
@@ -501,7 +502,7 @@ class _DropdownButton<T> extends StatelessWidget {
   }
 }
 
-class _CompactTextField extends StatelessWidget {
+class _CompactTextField extends StatefulWidget {
   const _CompactTextField({
     required this.controller,
     this.keyboardType,
@@ -514,14 +515,40 @@ class _CompactTextField extends StatelessWidget {
   final ValueChanged<String>? onSubmitted;
 
   @override
+  State<_CompactTextField> createState() => _CompactTextFieldState();
+}
+
+class _CompactTextFieldState extends State<_CompactTextField> {
+  late final FocusNode _focusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode = FocusNode();
+    // 焦点丢失时触发保存，覆盖「拖拽收键盘」「点击别处」等所有收键盘方式
+    _focusNode.addListener(() {
+      if (!_focusNode.hasFocus) {
+        widget.onSubmitted?.call(widget.controller.text);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: 90,
       child: TextField(
-        controller: controller,
-        keyboardType: keyboardType,
-        inputFormatters: inputFormatters,
-        onSubmitted: onSubmitted,
+        controller: widget.controller,
+        focusNode: _focusNode,
+        keyboardType: widget.keyboardType,
+        inputFormatters: widget.inputFormatters,
+        onSubmitted: widget.onSubmitted,
         textAlign: TextAlign.right,
         style: const TextStyle(color: Colors.white, fontSize: 13),
         decoration: const InputDecoration(
