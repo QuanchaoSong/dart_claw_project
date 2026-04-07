@@ -1,10 +1,12 @@
 import 'package:dart_claw/others/constants/color_constants.dart';
 import 'package:dart_claw/pages/settings/settings_logic.dart';
+import 'package:dart_claw/pages/settings/skills/settings_skills_logic.dart';
+import 'package:dart_claw/pages/settings/skills/settings_skills_view.dart';
+import 'package:dart_claw/pages/settings/skills/skill_store_page.dart';
 import 'package:dart_claw/pages/settings/view/settings_ai_models_view.dart';
 import 'package:dart_claw/pages/settings/view/settings_remote_view.dart';
 import 'package:dart_claw/pages/settings/view/settings_scheduler_view.dart';
 import 'package:dart_claw/pages/settings/view/settings_sessions_view.dart';
-import 'package:dart_claw/pages/settings/view/settings_skills_view.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -16,7 +18,7 @@ void openSettings(BuildContext context) {
     barrierLabel: 'settings',
     barrierColor: Colors.black.withOpacity(0.6),
     transitionDuration: const Duration(milliseconds: 280),
-    pageBuilder: (ctx, _, __) => const SettingsPage(),
+    pageBuilder: (ctx, _, __) => SettingsPage(),
     transitionBuilder: (ctx, anim, _, child) {
       final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
       return SlideTransition(
@@ -31,12 +33,13 @@ void openSettings(BuildContext context) {
 }
 
 class SettingsPage extends StatelessWidget {
-  const SettingsPage({super.key});
+  SettingsPage({super.key});
+
+  // 每次打开时重新创建 logic，关闭时自动销毁
+  final logic = Get.put(SettingsLogic());
 
   @override
-  Widget build(BuildContext context) {
-    // 每次打开时重新创建 logic，关闭时自动销毁
-    final logic = Get.put(SettingsLogic());
+  Widget build(BuildContext context) {    
 
     return Align(
       alignment: Alignment.centerRight,
@@ -246,19 +249,26 @@ class SettingsPage extends StatelessWidget {
       child: Obx(() {
         // Skills 页面不显示 Reset/Save，改成 Skills 专属操作栏
         if (logic.currentSection.value == SettingsSection.skills) {
+          final skillsLogic = Get.find<SettingsSkillsLogic>();
           return Row(
             children: [
               _footerButton(
                 icon: Icons.folder_open_outlined,
                 label: '打开目录',
-                onTap: logic.openSkillsDirectory,
+                onTap: skillsLogic.openSkillsDirectory,
+              ),
+              const SizedBox(width: 10),
+              _footerButton(
+                icon: Icons.storefront_rounded,
+                label: 'Skill Store',
+                onTap: () => openSkillStore(Get.context!),
               ),
               const SizedBox(width: 10),
               _footerButton(
                 icon: Icons.file_upload_outlined,
                 label: '导入 Skill 文件',
                 primary: true,
-                onTap: logic.importSkillFile,
+                onTap: skillsLogic.importSkillFile,
               ),
             ],
           );

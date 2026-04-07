@@ -1,4 +1,4 @@
-import 'package:dart_claw/pages/settings/settings_logic.dart';
+import 'package:dart_claw/pages/settings/skills/settings_skills_logic.dart';
 import 'package:dart_claw/pages/settings/view/common_settings_widgets.dart';
 import 'package:dart_claw_core/dart_claw_core.dart';
 import 'package:flutter/material.dart';
@@ -9,7 +9,7 @@ class SettingsSkillsView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final logic = Get.find<SettingsLogic>();
+    final logic = Get.put(SettingsSkillsLogic());
     return Obx(() {
       if (logic.skillsLoading.value) {
         return const Center(
@@ -80,7 +80,7 @@ class _SkillCard extends StatefulWidget {
   const _SkillCard({required this.skill, required this.logic});
 
   final ClawSkillInfo skill;
-  final SettingsLogic logic;
+  final SettingsSkillsLogic logic;
 
   @override
   State<_SkillCard> createState() => _SkillCardState();
