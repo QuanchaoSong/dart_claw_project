@@ -3,6 +3,7 @@ import 'package:dart_claw/pages/settings/skills/skill_store_list_view.dart';
 import 'package:dart_claw/pages/settings/skills/skill_store_logic.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// 从 Settings Skills footer 调用：openSkillStore(context)
 void openSkillStore(BuildContext context) {
@@ -93,6 +94,31 @@ class _SkillStorePage extends StatelessWidget {
             ),
           ),
           const Spacer(),
+          // 官方网站入口
+          GestureDetector(
+            onTap: () => launchUrl(
+              Uri.parse('http://dartclawskill.lushiyuye.com'),
+              mode: LaunchMode.externalApplication,
+            ),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.06),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.open_in_browser_rounded,
+                      size: 14, color: Colors.white54),
+                  SizedBox(width: 5),
+                  Text('官方网站',
+                      style: TextStyle(color: Colors.white54, fontSize: 12)),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
           GestureDetector(
             onTap: () => Navigator.of(context).pop(),
             child: Container(

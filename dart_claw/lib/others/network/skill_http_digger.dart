@@ -9,8 +9,8 @@ class SkillHttpDigger {
   static final SkillHttpDigger shared = SkillHttpDigger._();
 
   // 切换本地调试时改这一行
-  static const String _baseUrl = 'http://127.0.0.1:37791';
-  // static const String _baseUrl = 'http://dartclaw-api.lushiyuye.com';
+  // static const String _baseUrl = 'http://127.0.0.1:37791';
+  static const String _baseUrl = 'http://dartclaw-api.lushiyuye.com';
 
   static const String _apiKey = 'dart-claw-skill-2026';
 

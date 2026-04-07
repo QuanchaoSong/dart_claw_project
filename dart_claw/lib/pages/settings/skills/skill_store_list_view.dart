@@ -222,6 +222,11 @@ class _SkillStoreListViewState extends State<SkillStoreListView> {
           return _StoreItemCard(
             item: _logic.items[i],
             onTap: () => _openDetail(_logic.items[i]),
+            onDownload: () => _logic.downloadSkill(
+              _logic.items[i].id,
+              _logic.items[i].name,
+              _logic.items[i].version,
+            ),
           );
         },
       );
@@ -241,13 +246,19 @@ class _SkillStoreListViewState extends State<SkillStoreListView> {
 // ─── 列表卡片 ─────────────────────────────────────────────────────────────────
 
 class _StoreItemCard extends StatelessWidget {
-  const _StoreItemCard({required this.item, required this.onTap});
+  const _StoreItemCard({
+    required this.item,
+    required this.onTap,
+    required this.onDownload,
+  });
 
   final SkillStoreItemInfo item;
   final VoidCallback onTap;
+  final VoidCallback onDownload;
 
   @override
   Widget build(BuildContext context) {
+    final logic = Get.find<SkillStoreLogic>();
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -280,6 +291,44 @@ class _StoreItemCard extends StatelessWidget {
                   style: const TextStyle(
                       color: Colors.white38, fontSize: 11),
                 ),
+                const SizedBox(width: 8),
+                // 直接下载按鈕
+                Obx(() {
+                  final isDownloading =
+                      logic.downloadingIds.contains(item.id);
+                  return GestureDetector(
+                    onTap: isDownloading
+                        ? null
+                        : () {
+                            onDownload();
+                          },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: isDownloading
+                            ? Colors.white.withOpacity(0.05)
+                            : AppColors.primary.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                            color: isDownloading
+                                ? Colors.white12
+                                : AppColors.primary.withOpacity(0.3)),
+                      ),
+                      child: isDownloading
+                          ? const SizedBox(
+                              width: 10,
+                              height: 10,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 1.5,
+                                  color: Colors.white38),
+                            )
+                          : const Icon(Icons.download_rounded,
+                              size: 12,
+                              color: AppColors.reasoningAccent),
+                    ),
+                  );
+                }),
               ],
             ),
             if (item.description.isNotEmpty) ...[
